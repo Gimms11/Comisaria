@@ -1,0 +1,211 @@
+# ==============================================================
+# Docker Compose — Entorno de Desarrollo Local
+# Plataforma de Apoyo Ciudadano - La Tinguiña (Fase 1 Backend)
+#
+# Simula la infraestructura GCP completa:
+#   - PostgreSQL  →  Cloud SQL
+#   - Redis       →  Cloud Memorystore
+#   - MinIO       →  Cloud Storage (S3-compatible)
+#   - 4 Microservicios FastAPI con hot-reload
+# ==============================================================
+
+services:
+
+  # ──────────────────────────────────────────────
+  # Infraestructura
+  # ──────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: comisaria-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-comisaria_db}
+      POSTGRES_USER: ${POSTGRES_USER:-comisaria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_2026}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ../docs/03-base-de-datos/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../docs/03-base-de-datos/seeds.sql:/docker-entrypoint-initdb.d/02-seeds.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-comisaria} -d ${POSTGRES_DB:-comisaria_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: comisaria-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: comisaria-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"     # API S3-compatible
+      - "9001:9001"     # Console UI
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Crea los 3 buckets al arrancar
+  minio-init:
+    image: minio/mc:latest
+    container_name: comisaria-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin123};
+      mc mb --ignore-existing local/comisaria-evidencias-delitos;
+      mc mb --ignore-existing local/comisaria-reportes-urbanos;
+      mc mb --ignore-existing local/comisaria-guias-videos;
+      mc anonymous set download local/comisaria-guias-videos;
+      echo 'Buckets creados correctamente';
+      exit 0;
+      "
+
+  # ──────────────────────────────────────────────
+  # Microservicios FastAPI (hot-reload)
+  # ──────────────────────────────────────────────
+
+  ms-01-gateway-auth:
+    build:
+      context: .
+      dockerfile: services/ms-01-gateway-auth/Dockerfile
+      target: dev
+    container_name: comisaria-ms-01
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=ms-01-gateway-auth
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-comisaria}:${POSTGRES_PASSWORD:-dev_password_2026}@postgres:5432/${POSTGRES_DB:-comisaria_db}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-secret-key-2026}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-key-2026-cambiar-en-prod}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8081,*
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./packages:/app/packages:ro
+      - ./services/ms-01-gateway-auth/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ms-02-denuncias-anonimas:
+    build:
+      context: .
+      dockerfile: services/ms-02-denuncias-anonimas/Dockerfile
+      target: dev
+    container_name: comisaria-ms-02
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=ms-02-denuncias-anonimas
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-comisaria}:${POSTGRES_PASSWORD:-dev_password_2026}@postgres:5432/${POSTGRES_DB:-comisaria_db}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-secret-key-2026}
+      - MS01_INTERNAL_URL=http://ms-01-gateway-auth:8000
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - STORAGE_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - STORAGE_BUCKET=comisaria-evidencias-delitos
+      - STORAGE_PUBLIC_URL=http://localhost:9000
+      - FOLLOWUP_HMAC_KEY=${FOLLOWUP_HMAC_KEY:-dev-hmac-followup-key-2026}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-key-2026-cambiar-en-prod}
+      - CORS_ORIGINS=*
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./packages:/app/packages:ro
+      - ./services/ms-02-denuncias-anonimas/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  ms-03-reportes-ciudadanos:
+    build:
+      context: .
+      dockerfile: services/ms-03-reportes-ciudadanos/Dockerfile
+      target: dev
+    container_name: comisaria-ms-03
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=ms-03-reportes-ciudadanos
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-comisaria}:${POSTGRES_PASSWORD:-dev_password_2026}@postgres:5432/${POSTGRES_DB:-comisaria_db}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-secret-key-2026}
+      - MS01_INTERNAL_URL=http://ms-01-gateway-auth:8000
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - STORAGE_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - STORAGE_BUCKET=comisaria-reportes-urbanos
+      - STORAGE_PUBLIC_URL=http://localhost:9000
+      - FOLLOWUP_HMAC_KEY=${FOLLOWUP_HMAC_KEY:-dev-hmac-followup-key-2026}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-key-2026-cambiar-en-prod}
+      - CORS_ORIGINS=*
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./packages:/app/packages:ro
+      - ./services/ms-03-reportes-ciudadanos/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  ms-04-guias-contenido:
+    build:
+      context: .
+      dockerfile: services/ms-04-guias-contenido/Dockerfile
+      target: dev
+    container_name: comisaria-ms-04
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=ms-04-guias-contenido
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-comisaria}:${POSTGRES_PASSWORD:-dev_password_2026}@postgres:5432/${POSTGRES_DB:-comisaria_db}
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - STORAGE_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - STORAGE_BUCKET=comisaria-guias-videos
+      - STORAGE_PUBLIC_URL=http://localhost:9000
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-key-2026-cambiar-en-prod}
+      - CORS_ORIGINS=*
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./packages:/app/packages:ro
+      - ./services/ms-04-guias-contenido/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  pg_data:
+  minio_data:
