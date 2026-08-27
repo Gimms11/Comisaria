@@ -275,7 +275,10 @@ class ApiClient {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Error al crear guía cívica');
+      let msg = 'Error al crear guía cívica';
+      if (typeof err.detail === 'string') msg = err.detail;
+      else if (Array.isArray(err.detail)) msg = err.detail.map((d: any) => `${d.loc ? d.loc.join('.'): ''}: ${d.msg}`).join('\n');
+      throw new Error(msg);
     }
     return res.json();
   }
@@ -296,6 +299,13 @@ class ApiClient {
     });
     if (!res.ok) throw new Error('Error al cambiar publicación de la guía');
     return res.json();
+  }
+
+  async deleteGuide(id: string): Promise<void> {
+    const res = await this.fetchWithAuth(`${MS04_URL}/api/v1/admin/guides/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Error al eliminar la guía cívica');
   }
 
   async addGuideResource(

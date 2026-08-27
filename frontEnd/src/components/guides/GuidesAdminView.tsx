@@ -2,26 +2,17 @@ import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   Plus,
-  Video,
-  Eye,
-  ThumbsUp,
   Globe,
   FileText,
-  Clock,
-  CheckCircle,
-  XCircle,
   Paperclip,
-  ExternalLink,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { GuideCategory, GuideItem } from '../../types';
-import { Card, CardHeader, CardTitle } from '../ui/Card';
-import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { formatTimeAgo } from '../../lib/utils';
+import { GuideAdminCard } from './GuideAdminCard';
 
 export const GuidesAdminView: React.FC = () => {
   const [guides, setGuides] = useState<GuideItem[]>([]);
@@ -34,14 +25,22 @@ export const GuidesAdminView: React.FC = () => {
   const [selectedGuideForResource, setSelectedGuideForResource] = useState<GuideItem | null>(null);
 
   // Forms
-  const [newGuideForm, setNewGuideForm] = useState({
+  const [newGuideForm, setNewGuideForm] = useState<{
+    title: string;
+    summary: string;
+    category_id: string;
+    content_type: 'video' | 'articulo' | 'infografia' | 'mixto';
+    main_video_url: string;
+    thumbnail_url: string;
+    transcript: string;
+    is_featured: boolean;
+  }>({
     title: '',
     summary: '',
     category_id: '',
     content_type: 'video',
     main_video_url: '',
     thumbnail_url: '',
-    duration_seconds: 45,
     transcript: '',
     is_featured: false,
   });
@@ -54,7 +53,17 @@ export const GuidesAdminView: React.FC = () => {
     body: '',
   });
 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingGuide, setEditingGuide] = useState<GuideItem | null>(null);
+  const [editGuideForm, setEditGuideForm] = useState({
+    title: '',
+    summary: '',
+    category_id: '',
+    main_video_url: '',
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [togglingGuideId, setTogglingGuideId] = useState<string | null>(null);
 
   const fetchGuides = async () => {
     try {
@@ -84,10 +93,55 @@ export const GuidesAdminView: React.FC = () => {
 
   const handleTogglePublish = async (guide: GuideItem) => {
     try {
+      setTogglingGuideId(guide.id);
       await api.toggleGuidePublish(guide.id, !guide.is_published);
-      fetchGuides();
+      await fetchGuides();
     } catch (err: any) {
       alert(err.message || 'Error al actualizar publicación');
+    } finally {
+      setTogglingGuideId(null);
+    }
+  };
+
+  const handleDeleteGuide = async (guide: GuideItem) => {
+    if (!window.confirm(`¿Estás seguro de eliminar la guía "${guide.title}"?`)) return;
+    try {
+      await api.deleteGuide(guide.id);
+      await fetchGuides();
+    } catch (err: any) {
+      alert(err.message || 'Error al eliminar la guía');
+    }
+  };
+
+  const handleOpenEdit = (guide: GuideItem) => {
+    setEditingGuide(guide);
+    setEditGuideForm({
+      title: guide.title,
+      summary: guide.summary,
+      category_id: guide.category_id || '',
+      main_video_url: guide.main_video_url || '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateGuide = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGuide) return;
+    try {
+      setIsSubmitting(true);
+      await api.updateGuide(editingGuide.id, {
+        title: editGuideForm.title,
+        summary: editGuideForm.summary,
+        category_id: editGuideForm.category_id || undefined,
+        main_video_url: editGuideForm.main_video_url || undefined,
+      });
+      setIsEditModalOpen(false);
+      setEditingGuide(null);
+      await fetchGuides();
+    } catch (err: any) {
+      alert(err.message || 'Error al actualizar la guía');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -100,6 +154,7 @@ export const GuidesAdminView: React.FC = () => {
         category_id: newGuideForm.category_id || undefined,
       });
       setIsCreateModalOpen(false);
+      fetchGuides();
       setNewGuideForm({
         title: '',
         summary: '',
@@ -107,7 +162,6 @@ export const GuidesAdminView: React.FC = () => {
         content_type: 'video',
         main_video_url: '',
         thumbnail_url: '',
-        duration_seconds: 45,
         transcript: '',
         is_featured: false,
       });
@@ -177,91 +231,90 @@ export const GuidesAdminView: React.FC = () => {
           </div>
         ) : (
           guides.map((guide) => (
-            <Card
+            <GuideAdminCard
               key={guide.id}
-              className="bg-slate-900/90 border-slate-800 flex flex-col justify-between overflow-hidden p-0 group"
-            >
-              {/* Media Thumbnail Container */}
-              <div className="relative aspect-[16/10] bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-800">
-                {guide.thumbnail_url ? (
-                  <img
-                    src={guide.thumbnail_url}
-                    alt={guide.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-slate-600">
-                    <Video className="w-10 h-10" />
-                    <span className="text-xs font-mono">Formato Vertical 9:16</span>
-                  </div>
-                )}
-
-                {/* Duration Badge */}
-                {guide.duration_seconds && (
-                  <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-[10px] font-mono font-bold flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {guide.duration_seconds}s
-                  </span>
-                )}
-
-                {/* Published Badge */}
-                <div className="absolute top-2 left-2">
-                  <Badge variant={guide.is_published ? 'success' : 'warning'}>
-                    {guide.is_published ? 'Publicado en App' : 'Borrador'}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Card Body */}
-              <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider font-mono">
-                    {guide.category_name || 'Trámites PNP'}
-                  </span>
-                  <h3 className="text-sm font-bold text-white tracking-tight mt-1 line-clamp-2">
-                    {guide.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 line-clamp-2 mt-1">{guide.summary}</p>
-                </div>
-
-                {/* Analytics Counters */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-mono">
-                  <span className="flex items-center gap-1">
-                    <Eye className="w-3.5 h-3.5 text-sky-400" /> {guide.view_count} vistas
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <ThumbsUp className="w-3.5 h-3.5 text-emerald-400" /> {guide.helpful_count} útiles
-                  </span>
-                </div>
-
-                {/* Actions */}
-                <div className="pt-2 flex items-center gap-2">
-                  <Button
-                    variant={guide.is_published ? 'outline' : 'success'}
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => handleTogglePublish(guide)}
-                  >
-                    {guide.is_published ? 'Ocultar' : 'Publicar'}
-                  </Button>
-
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => {
-                      setSelectedGuideForResource(guide);
-                      setIsResourceModalOpen(true);
-                    }}
-                    title="Adjuntar PDF o Enlace Oficial"
-                  >
-                    <Paperclip className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
+              guide={guide}
+              isToggling={togglingGuideId === guide.id}
+              onTogglePublish={handleTogglePublish}
+              onEdit={handleOpenEdit}
+              onDelete={handleDeleteGuide}
+              onAttachResource={(selected) => {
+                setSelectedGuideForResource(selected);
+                setIsResourceModalOpen(true);
+              }}
+            />
           ))
         )}
       </div>
+
+      {/* Edit Guide Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingGuide(null);
+        }}
+        title={`Editar Guía: ${editingGuide?.title || ''}`}
+        subtitle="Actualiza el contenido, categoría o enlace de video de la guía"
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleUpdateGuide} className="space-y-4 text-left">
+          <Input
+            label="Título de la Guía"
+            required
+            placeholder="Ej: Cómo denunciar pérdida de DNI por internet"
+            value={editGuideForm.title}
+            onChange={(e) => setEditGuideForm((prev) => ({ ...prev, title: e.target.value }))}
+          />
+
+          <Select
+            label="Categoría"
+            value={editGuideForm.category_id}
+            onChange={(e) =>
+              setEditGuideForm((prev) => ({ ...prev, category_id: e.target.value }))
+            }
+            options={[
+              { value: '', label: 'Sin categoría' },
+              ...categories.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
+
+          <Input
+            label="URL del Video de TikTok (dejar igual o pegar uno nuevo)"
+            placeholder="https://www.tiktok.com/@comisaria/video/..."
+            value={editGuideForm.main_video_url}
+            onChange={(e) =>
+              setEditGuideForm((prev) => ({ ...prev, main_video_url: e.target.value }))
+            }
+          />
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Resumen / Pasos Clave (Markdown)
+            </label>
+            <textarea
+              rows={3}
+              required
+              placeholder="1. Ingrese a la plataforma... 2. Siga los pasos..."
+              value={editGuideForm.summary}
+              onChange={(e) =>
+                setEditGuideForm((prev) => ({ ...prev, summary: e.target.value }))
+              }
+              className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            className="w-full"
+            isLoading={isSubmitting}
+          >
+            {isSubmitting ? 'Guardando cambios...' : 'Guardar Cambios'}
+          </Button>
+        </form>
+      </Modal>
 
       {/* Create Guide Modal */}
       <Modal
@@ -280,35 +333,21 @@ export const GuidesAdminView: React.FC = () => {
             onChange={(e) => setNewGuideForm((prev) => ({ ...prev, title: e.target.value }))}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Select
-              label="Categoría"
-              value={newGuideForm.category_id}
-              onChange={(e) =>
-                setNewGuideForm((prev) => ({ ...prev, category_id: e.target.value }))
-              }
-              options={[
-                { value: '', label: 'Seleccione una categoría' },
-                ...categories.map((c) => ({ value: c.id, label: c.name })),
-              ]}
-            />
-
-            <Input
-              label="Duración del Video (segundos)"
-              type="number"
-              value={newGuideForm.duration_seconds}
-              onChange={(e) =>
-                setNewGuideForm((prev) => ({
-                  ...prev,
-                  duration_seconds: parseInt(e.target.value) || 0,
-                }))
-              }
-            />
-          </div>
+          <Select
+            label="Categoría"
+            value={newGuideForm.category_id}
+            onChange={(e) =>
+              setNewGuideForm((prev) => ({ ...prev, category_id: e.target.value }))
+            }
+            options={[
+              { value: '', label: 'Seleccione una categoría' },
+              ...categories.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
 
           <Input
-            label="URL del Video (MP4 / WebM / Cloud Storage)"
-            placeholder="https://storage.googleapis.com/.../video.mp4"
+            label="URL del Video de TikTok"
+            placeholder="https://www.tiktok.com/@comisaria/video/... o https://vm.tiktok.com/..."
             value={newGuideForm.main_video_url}
             onChange={(e) =>
               setNewGuideForm((prev) => ({ ...prev, main_video_url: e.target.value }))
@@ -331,8 +370,18 @@ export const GuidesAdminView: React.FC = () => {
             />
           </div>
 
-          <Button type="submit" variant="primary" size="sm" className="w-full" isLoading={isSubmitting}>
-            Registrar Guía en Borrador
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            className="w-full"
+            isLoading={isSubmitting}
+          >
+            {isSubmitting
+              ? newGuideForm.main_video_url
+                ? 'Descargando TikTok y creando guía...'
+                : 'Guardando guía...'
+              : 'Registrar Guía en Borrador'}
           </Button>
         </form>
       </Modal>

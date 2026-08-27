@@ -132,3 +132,19 @@ async def add_guide_resource(
         return resource
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete(
+    "/{guide_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO))],
+)
+async def delete_guide(
+    guide_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        await GuideService.delete_guide(db, guide_id=guide_id)
+        return None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

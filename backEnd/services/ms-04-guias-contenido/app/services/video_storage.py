@@ -26,8 +26,8 @@ class VideoStorageClient:
                     aws_secret_access_key=settings.STORAGE_SECRET_KEY,
                     config=Config(
                         signature_version="s3v4",
-                        connect_timeout=1,
-                        read_timeout=1,
+                        connect_timeout=10,
+                        read_timeout=60,
                         retries={"max_attempts": 1},
                     ),
                     region_name="us-central1",

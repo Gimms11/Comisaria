@@ -1,8 +1,25 @@
+import re
 from datetime import datetime
 from typing import List, Optional
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from packages.shared.schemas.enums import GuideContentType, GuideResourceType
+
+
+# --- TikTok URL validation ---
+
+TIKTOK_LONG_URL_REGEX = re.compile(
+    r"^https?://(www\.)?tiktok\.com/@[\w.]+/video/(\d{15,25})(\?.*)?$"
+)
+
+TIKTOK_SHORT_URL_REGEX = re.compile(
+    r"^https?://(vm|vt|www)\.tiktok\.com/(t/)?[\w]+/?(\?.*)?$"
+)
+
+def is_tiktok_url(url: str) -> bool:
+    url = url.strip()
+    return bool(TIKTOK_LONG_URL_REGEX.match(url) or TIKTOK_SHORT_URL_REGEX.match(url))
+
 
 
 class GuideCategoryResponse(BaseModel):
@@ -77,9 +94,9 @@ class GuideDetailResponse(BaseModel):
 
 class CreateGuideRequest(BaseModel):
     category_id: Optional[uuid.UUID] = None
-    title: str = Field(..., min_length=3, max_length=255)
+    title: str = Field(..., min_length=1, max_length=255)
     slug: Optional[str] = Field(None, max_length=255)
-    summary: str = Field(..., min_length=5)
+    summary: str = Field(..., min_length=1)
     content_type: GuideContentType = GuideContentType.VIDEO
     main_video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
@@ -88,6 +105,14 @@ class CreateGuideRequest(BaseModel):
     is_featured: bool = False
     is_published: bool = False
     sort_order: int = 0
+
+    @field_validator("main_video_url", mode="before")
+    @classmethod
+    def validate_tiktok_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        # Solo verificamos que sea TikTok para permitir descarga, si no es, asumimos que es otro link de video.
+        return v
 
 
 class UpdateGuideRequest(BaseModel):
@@ -103,6 +128,13 @@ class UpdateGuideRequest(BaseModel):
     is_featured: Optional[bool] = None
     is_published: Optional[bool] = None
     sort_order: Optional[int] = None
+
+    @field_validator("main_video_url", mode="before")
+    @classmethod
+    def validate_tiktok_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v
 
 
 class CreateGuideResourceRequest(BaseModel):

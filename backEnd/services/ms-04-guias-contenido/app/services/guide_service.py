@@ -12,11 +12,17 @@ from packages.shared.models.guide_resource import GuideResource
 from packages.shared.schemas.enums import GuideResourceType
 from app.schemas.guide import (
     CreateGuideRequest,
+    CreateGuideResourceRequest,
+    GuideCategoryResponse,
     GuideDetailResponse,
     GuideListItem,
+    GuideResourceResponse,
     InteractionCountResponse,
+    PublishGuideRequest,
     UpdateGuideRequest,
+    is_tiktok_url,
 )
+from app.services.tiktok_downloader import tiktok_downloader
 
 
 def slugify(text: str) -> str:
@@ -122,15 +128,29 @@ class GuideService:
         if slug_check.scalar_one_or_none():
             slug = f"{slug}-{uuid.uuid4().hex[:6]}"
 
+        video_url = guide_in.main_video_url
+        thumbnail_url = guide_in.thumbnail_url
+        duration_seconds = guide_in.duration_seconds
+
+        if guide_in.main_video_url and is_tiktok_url(guide_in.main_video_url):
+            tiktok_data = await tiktok_downloader.process_tiktok_url(
+                guide_in.main_video_url, slug
+            )
+            video_url = tiktok_data["video_url"]
+            if duration_seconds is None and tiktok_data.get("duration"):
+                duration_seconds = tiktok_data["duration"]
+            if thumbnail_url is None and tiktok_data.get("cover"):
+                thumbnail_url = tiktok_data["cover"]
+
         guide = Guide(
             category_id=guide_in.category_id,
             title=guide_in.title.strip(),
             slug=slug,
             summary=guide_in.summary,
             content_type=guide_in.content_type,
-            main_video_url=guide_in.main_video_url,
-            thumbnail_url=guide_in.thumbnail_url,
-            duration_seconds=guide_in.duration_seconds,
+            main_video_url=video_url,
+            thumbnail_url=thumbnail_url,
+            duration_seconds=duration_seconds,
             transcript=guide_in.transcript,
             is_featured=guide_in.is_featured,
             is_published=guide_in.is_published,
@@ -150,6 +170,16 @@ class GuideService:
         guide = result.scalar_one_or_none()
         if not guide:
             raise ValueError("Guía no encontrada")
+
+        if update_in.main_video_url and is_tiktok_url(update_in.main_video_url):
+            tiktok_data = await tiktok_downloader.process_tiktok_url(
+                update_in.main_video_url, guide.slug
+            )
+            update_in.main_video_url = tiktok_data["video_url"]
+            if update_in.duration_seconds is None and tiktok_data.get("duration"):
+                update_in.duration_seconds = tiktok_data["duration"]
+            if update_in.thumbnail_url is None and tiktok_data.get("cover"):
+                update_in.thumbnail_url = tiktok_data["cover"]
 
         update_data = update_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -173,6 +203,18 @@ class GuideService:
         await db.commit()
         await db.refresh(guide)
         return guide
+
+    @staticmethod
+    async def delete_guide(db: AsyncSession, guide_id: uuid.UUID) -> bool:
+        query = select(Guide).where(Guide.id == guide_id)
+        result = await db.execute(query)
+        guide = result.scalar_one_or_none()
+        if not guide:
+            raise ValueError("Guía no encontrada")
+
+        await db.delete(guide)
+        await db.commit()
+        return True
 
     @staticmethod
     async def attach_resource(

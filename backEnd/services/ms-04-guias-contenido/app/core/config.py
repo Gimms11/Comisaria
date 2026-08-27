@@ -13,5 +13,10 @@ class Settings(SharedSettings):
     STORAGE_BUCKET: str = "comisaria-guias-videos"
     STORAGE_PUBLIC_URL: Optional[str] = "http://localhost:9000"
 
+    # TikTok Download API (RapidAPI)
+    TIKTOK_API_URL: str = "https://tiktok-video-no-watermark2.p.rapidapi.com/"
+    TIKTOK_API_KEY: Optional[str] = None
+    TIKTOK_API_HOST: str = "tiktok-video-no-watermark2.p.rapidapi.com"
+
 
 settings = Settings()

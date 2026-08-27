@@ -7,9 +7,11 @@ import {
   Dimensions,
   Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { Video, ResizeMode } from 'expo-av';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { BorderRadius, Spacing } from '@/constants/theme';
@@ -33,6 +35,7 @@ export const GuideVideoCard: React.FC<GuideVideoCardProps> = ({
   const [hasVoted, setHasVoted] = useState(false);
   const [stepsVisible, setStepsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(true);
 
   const cardHeight = height || Dimensions.get('window').height * 0.76;
 
@@ -70,16 +73,39 @@ export const GuideVideoCard: React.FC<GuideVideoCardProps> = ({
   return (
     <>
       <View style={[styles.cardContainer, { height: cardHeight }]}>
-        {/* Background Image / Video Poster */}
-        <Image
-          source={{ uri: guide.thumbnail_url || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800' }}
-          style={styles.backgroundImage}
-          contentFit="cover"
-          transition={300}
-        />
+        {/* Background: Native Video or Image */}
+        {guide.main_video_url ? (
+          <View style={styles.backgroundImage}>
+            <Video
+              source={{ uri: guide.main_video_url }}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              useNativeControls
+              shouldPlay={false}
+              isLooping={false}
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded) setIsBuffering(status.isBuffering);
+              }}
+            />
+            {isBuffering && (
+              <ActivityIndicator
+                size="large"
+                color="#FFFFFF"
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+          </View>
+        ) : (
+          <Image
+            source={{ uri: guide.thumbnail_url || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800' }}
+            style={styles.backgroundImage}
+            contentFit="cover"
+            transition={300}
+          />
+        )}
 
-        {/* Dark gradient overlay */}
-        <View style={styles.gradientOverlay} />
+        {/* Dark gradient overlay (pass-through for touches) */}
+        <View style={styles.gradientOverlay} pointerEvents="none" />
 
         {/* Top Category Badge & Duration */}
         <View style={styles.topBar}>
@@ -95,18 +121,20 @@ export const GuideVideoCard: React.FC<GuideVideoCardProps> = ({
           </View>
         </View>
 
-        {/* Center Play Button indicator */}
-        <Pressable
-          onPress={() => setStepsVisible(true)}
-          style={({ pressed }) => [
-            styles.centerPlayButton,
-            { opacity: pressed ? 0.7 : 0.9 },
-          ]}
-        >
-          <View style={styles.playIconCircle}>
-            <Feather name="play" size={28} color="#FFFFFF" style={{ marginLeft: 3 }} />
-          </View>
-        </Pressable>
+        {/* Center Play Button indicator (only when static poster without video) */}
+        {!guide.main_video_url && (
+          <Pressable
+            onPress={() => setStepsVisible(true)}
+            style={({ pressed }) => [
+              styles.centerPlayButton,
+              { opacity: pressed ? 0.7 : 0.9 },
+            ]}
+          >
+            <View style={styles.playIconCircle}>
+              <Feather name="play" size={28} color="#FFFFFF" style={{ marginLeft: 3 }} />
+            </View>
+          </Pressable>
+        )}
 
         {/* Right Side Action Rail */}
         <View style={styles.rightRail}>

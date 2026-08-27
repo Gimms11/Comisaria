@@ -194,6 +194,7 @@ services:
       - STORAGE_BUCKET=comisaria-guias-videos
       - STORAGE_PUBLIC_URL=http://localhost:9000
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-key-2026-cambiar-en-prod}
+      - TIKTOK_API_KEY=${TIKTOK_API_KEY}
       - CORS_ORIGINS=*
     ports:
       - "8004:8000"
