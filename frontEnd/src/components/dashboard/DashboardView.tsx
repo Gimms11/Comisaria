@@ -16,6 +16,10 @@ import {
   ShieldCheck,
   Video,
   Plus,
+  Compass,
+  Flame,
+  Search,
+  ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import {
@@ -33,7 +37,7 @@ import { Button } from '../ui/Button';
 import { formatTimeAgo, getPriorityStyles, getStatusStyles } from '../../lib/utils';
 
 export const DashboardView: React.FC = () => {
-  const { alerts } = useWebSocketStore();
+  const { alerts, latestAlert } = useWebSocketStore();
   const { officer } = useAuthStore();
   const { setActiveTab, openCrimeReportModal, openCommunityReportModal } = useUiStore();
 
@@ -94,6 +98,13 @@ export const DashboardView: React.FC = () => {
     loadData();
   }, [role]);
 
+  // Recarga reactiva en tiempo real al ingresar nuevo reporte o cambio de estado
+  useEffect(() => {
+    if (latestAlert) {
+      loadData();
+    }
+  }, [latestAlert]);
+
   // Recalcular métricas seguras
   const safeCrimeReports = crimeReports || [];
   const safeCommunityReports = communityReports || [];
@@ -119,15 +130,15 @@ export const DashboardView: React.FC = () => {
       {alerts.length > 0 && alerts[0].priority === 'urgente' && role !== 'moderador' && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-red-950/80 via-red-900/60 to-slate-900 border border-red-500/50 shadow-2xl flex items-center justify-between gap-4 animate-in fade-in">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-red-600 text-white radar-emergency">
+            <div className="p-2.5 rounded-xl bg-red-600 text-white radar-emergency shrink-0">
               <AlertTriangle className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-red-400 font-mono">
-                  🚨 ALERTA TÁCTICA PRIORITARIA DESPACHADA
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-red-400 font-mono whitespace-nowrap">
+                  ALERTA TÁCTICA PRIORITARIA DESPACHADA
                 </span>
-                <span className="text-xs text-slate-300">
+                <span className="text-xs text-slate-300 font-mono">
                   Código: <strong className="text-white">{alerts[0].public_code}</strong>
                 </span>
               </div>
@@ -147,6 +158,7 @@ export const DashboardView: React.FC = () => {
                 setActiveTab('crime_reports');
               }
             }}
+            className="whitespace-nowrap shrink-0"
           >
             Intervenir Caso <ArrowUpRight className="w-4 h-4" />
           </Button>
@@ -157,7 +169,7 @@ export const DashboardView: React.FC = () => {
       <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div
-            className={`p-2.5 rounded-xl border font-mono font-bold text-xs ${
+            className={`p-2.5 rounded-xl border font-mono font-bold text-xs whitespace-nowrap shrink-0 ${
               role === 'admin'
                 ? 'bg-red-500/10 text-red-400 border-red-500/30'
                 : role === 'comisario'
@@ -171,10 +183,10 @@ export const DashboardView: React.FC = () => {
           </div>
           <div>
             <h2 className="text-base font-bold text-white tracking-tight">
-              {role === 'admin' && 'Centro de Mando Integral & Auditoría'}
-              {role === 'comisario' && 'Puesto de Comando & Dirección Operativa'}
-              {role === 'operador' && 'Consola Táctica de Guardia & Despacho'}
-              {role === 'moderador' && 'Centro de Participación Vecinal & Contenido Cívico'}
+              {role === 'admin' && 'Centro de Mando Integral y Auditoría'}
+              {role === 'comisario' && 'Puesto de Comando y Dirección Operativa'}
+              {role === 'operador' && 'Consola Táctica de Guardia y Despacho'}
+              {role === 'moderador' && 'Centro de Participación Vecinal y Contenido Cívico'}
             </h2>
             <p className="text-xs text-slate-400 font-mono">
               {role === 'admin' && 'Supervisión total de seguridad, dotación policial y gestión de microservicios'}
@@ -185,133 +197,196 @@ export const DashboardView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {['admin', 'comisario'].includes(role) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {['admin', 'comisario', 'operador'].includes(role) && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActiveTab('officers')}
-              className="text-xs gap-1.5 border-slate-700 bg-slate-950/60"
+              onClick={() => setActiveTab('crime_reports')}
+              className="text-xs gap-1.5 border-slate-700 bg-slate-950/60 whitespace-nowrap"
             >
-              <Users className="w-3.5 h-3.5 text-sky-400" /> Dotación Policial
+              <ShieldAlert className="w-3.5 h-3.5 text-sky-400" /> Delitos (MS-02)
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveTab('community_map')}
+            className="text-xs gap-1.5 border-slate-700 bg-slate-950/60 whitespace-nowrap"
+          >
+            <MapPin className="w-3.5 h-3.5 text-purple-400" /> Mapa Vecinal (MS-03)
+          </Button>
           {['admin', 'comisario', 'moderador'].includes(role) && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => setActiveTab('guides')}
-              className="text-xs gap-1.5 border-slate-700 bg-slate-950/60"
+              className="text-xs gap-1.5 border-slate-700 bg-slate-950/60 whitespace-nowrap"
             >
-              <BookOpen className="w-3.5 h-3.5 text-purple-400" /> Biblioteca Cívica
+              <BookOpen className="w-3.5 h-3.5 text-sky-400" /> Guías Cívicas
+            </Button>
+          )}
+          {['admin', 'comisario'].includes(role) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab('officers')}
+              className="text-xs gap-1.5 border-slate-700 bg-slate-950/60 whitespace-nowrap"
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-400" /> Dotación PNP
             </Button>
           )}
         </div>
       </div>
 
-      {/* KPI Cards Grid - Adaptadas según el rol */}
+      {/* KPI Cards Grid - Adaptadas según el rol con navegación interactiva */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {role === 'moderador' ? (
           <>
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('community_map')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-purple-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">INCIDENTES VECINALES</span>
-                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 group-hover:scale-110 transition-transform">
                   <MapPin className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{communityTotal}</span>
-                <span className="text-xs text-purple-400 font-medium">Reportes registrados</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{communityTotal}</span>
+                  <p className="text-xs text-purple-400 font-medium mt-0.5">Reportes registrados</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-purple-400 transition-colors" />
               </div>
             </Card>
 
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('community_map')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-amber-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">PENDIENTES SERENAZGO</span>
-                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 group-hover:scale-110 transition-transform">
                   <Clock className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{communityPending}</span>
-                <span className="text-xs text-amber-400 font-medium">Por canalizar</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{communityPending}</span>
+                  <p className="text-xs text-amber-400 font-medium mt-0.5">Por canalizar</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-amber-400 transition-colors" />
               </div>
             </Card>
 
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('guides')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-emerald-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">GUÍAS PUBLICADAS</span>
-                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 group-hover:scale-110 transition-transform">
                   <Video className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{publishedGuidesCount}</span>
-                <span className="text-xs text-emerald-400 font-medium">De {safeGuides.length} guías</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{publishedGuidesCount}</span>
+                  <p className="text-xs text-emerald-400 font-medium mt-0.5">De {safeGuides.length} guías</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 transition-colors" />
               </div>
             </Card>
 
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('community_map')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-sky-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">DIFUSIÓN COMUNITARIA</span>
-                <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400 border border-sky-500/30 group-hover:scale-110 transition-transform">
                   <Share2 className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{totalShares}</span>
-                <span className="text-xs text-sky-400 font-medium">Vecinos involucrados</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{totalShares}</span>
+                  <p className="text-xs text-sky-400 font-medium mt-0.5">Vecinos involucrados</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 transition-colors" />
               </div>
             </Card>
           </>
         ) : (
           <>
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('crime_reports')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-red-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">URGENCIAS ACTIVAS</span>
-                <div className="p-2 rounded-xl bg-red-500/15 text-red-400 border border-red-500/30">
+                <div className="p-2 rounded-xl bg-red-500/15 text-red-400 border border-red-500/30 group-hover:scale-110 transition-transform">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{urgentCount}</span>
-                <span className="text-xs text-red-400 font-medium">Prioridad Inmediata / SOS</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{urgentCount}</span>
+                  <p className="text-xs text-red-400 font-medium mt-0.5">Prioridad Inmediata / SOS</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-red-400 transition-colors" />
               </div>
             </Card>
 
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('crime_reports')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-sky-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">EN ATENCIÓN / TURNO</span>
-                <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400 border border-sky-500/30 group-hover:scale-110 transition-transform">
                   <Clock className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{inProgressCount}</span>
-                <span className="text-xs text-sky-400 font-medium">En proceso operativo</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{inProgressCount}</span>
+                  <p className="text-xs text-sky-400 font-medium mt-0.5">En proceso operativo</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 transition-colors" />
               </div>
             </Card>
 
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab('crime_reports')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-amber-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">PENDIENTES DE REVISIÓN</span>
-                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 group-hover:scale-110 transition-transform">
                   <FileText className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">{pendingCount}</span>
-                <span className="text-xs text-amber-400 font-medium">Mesa de partes / guardia</span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">{pendingCount}</span>
+                  <p className="text-xs text-amber-400 font-medium mt-0.5">Mesa de partes / guardia</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-amber-400 transition-colors" />
               </div>
             </Card>
 
-            <Card className="glass-card-hover bg-slate-900/80 border-slate-800">
+            <Card
+              onClick={() => setActiveTab(['admin', 'comisario'].includes(role) ? 'officers' : 'community_map')}
+              className="glass-card-hover bg-slate-900/80 border-slate-800 cursor-pointer hover:border-purple-500/60 transition-all group"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 font-mono">
                   {['admin', 'comisario'].includes(role) ? 'DOTACIÓN POLICIAL' : 'REPORTES VECINALES'}
                 </span>
-                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 group-hover:scale-110 transition-transform">
                   {['admin', 'comisario'].includes(role) ? (
                     <Users className="w-5 h-5" />
                   ) : (
@@ -319,15 +394,18 @@ export const DashboardView: React.FC = () => {
                   )}
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-white font-heading">
-                  {['admin', 'comisario'].includes(role) ? activeOfficersCount : communityTotal}
-                </span>
-                <span className="text-xs text-purple-400 font-medium">
-                  {['admin', 'comisario'].includes(role)
-                    ? 'Efectivos activos registrados'
-                    : 'Incidentes Serenazgo'}
-                </span>
+              <div className="mt-3 flex items-baseline justify-between">
+                <div>
+                  <span className="text-3xl font-extrabold text-white font-heading">
+                    {['admin', 'comisario'].includes(role) ? activeOfficersCount : communityTotal}
+                  </span>
+                  <p className="text-xs text-purple-400 font-medium mt-0.5">
+                    {['admin', 'comisario'].includes(role)
+                      ? 'Efectivos activos registrados'
+                      : 'Incidentes Serenazgo'}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-purple-400 transition-colors" />
               </div>
             </Card>
           </>
@@ -350,9 +428,9 @@ export const DashboardView: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setActiveTab('community_map')}
-                    className="text-xs"
+                    className="text-xs whitespace-nowrap"
                   >
-                    Ver Mapa <ArrowUpRight className="w-3.5 h-3.5" />
+                    Ver Mapa <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </CardHeader>
 
@@ -374,25 +452,25 @@ export const DashboardView: React.FC = () => {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono font-bold text-xs text-purple-400">
+                            <span className="font-mono font-bold text-xs text-purple-400 whitespace-nowrap">
                               {report.public_code}
                             </span>
-                            <Badge variant="default">{report.category_name}</Badge>
-                            <span className="text-[11px] text-slate-500 font-mono">
+                            <Badge variant="default" className="whitespace-nowrap shrink-0">{report.category_name}</Badge>
+                            <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
                               {formatTimeAgo(report.created_at)}
                             </span>
                           </div>
                           <p className="text-xs text-slate-300 font-medium truncate mt-1">
                             {report.description}
                           </p>
-                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5 whitespace-nowrap">
                             {report.address_reference || 'Sector La Tinguiña'} •{' '}
                             <span className="text-purple-400 font-semibold">
                               {report.shares_count} difusión(es)
                             </span>
                           </p>
                         </div>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" className="shrink-0">
                           <Eye className="w-4 h-4 text-slate-400 hover:text-white" />
                         </Button>
                       </div>
@@ -408,15 +486,15 @@ export const DashboardView: React.FC = () => {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-5 h-5 text-sky-400" />
-                    <CardTitle>Guías & Contenido Cívico (MS-04)</CardTitle>
+                    <CardTitle>Guías y Contenido Cívico (MS-04)</CardTitle>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setActiveTab('guides')}
-                    className="text-xs"
+                    className="text-xs whitespace-nowrap"
                   >
-                    Gestionar <ArrowUpRight className="w-3.5 h-3.5" />
+                    Gestionar <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </CardHeader>
 
@@ -429,12 +507,13 @@ export const DashboardView: React.FC = () => {
                     safeGuides.slice(0, 5).map((guide) => (
                       <div
                         key={guide.id}
-                        className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3"
+                        onClick={() => setActiveTab('guides')}
+                        className="p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800/80 flex items-center justify-between gap-3 cursor-pointer transition-colors"
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
                                 guide.is_published
                                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                                   : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
@@ -442,7 +521,7 @@ export const DashboardView: React.FC = () => {
                             >
                               {guide.is_published ? 'PUBLICADA' : 'BORRADOR'}
                             </span>
-                            <span className="text-[11px] text-slate-400 font-mono">
+                            <span className="text-[11px] text-slate-400 font-mono whitespace-nowrap">
                               {guide.duration_seconds}s
                             </span>
                           </div>
@@ -451,6 +530,7 @@ export const DashboardView: React.FC = () => {
                           </p>
                           <p className="text-[11px] text-slate-400 truncate">{guide.summary}</p>
                         </div>
+                        <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
                       </div>
                     ))
                   )}
@@ -472,9 +552,9 @@ export const DashboardView: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setActiveTab('crime_reports')}
-                    className="text-xs"
+                    className="text-xs whitespace-nowrap"
                   >
-                    Ver todos <ArrowUpRight className="w-3.5 h-3.5" />
+                    Ver todos <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </CardHeader>
 
@@ -500,7 +580,7 @@ export const DashboardView: React.FC = () => {
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
                             <div
-                              className={`w-3 h-12 rounded-full ${
+                              className={`w-3 h-12 rounded-full shrink-0 ${
                                 report.priority === 'urgente'
                                   ? 'bg-red-500'
                                   : report.priority === 'alta'
@@ -510,16 +590,17 @@ export const DashboardView: React.FC = () => {
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono font-bold text-xs text-sky-400 tracking-wider">
+                                <span className="font-mono font-bold text-xs text-sky-400 tracking-wider whitespace-nowrap">
                                   {report.public_code}
                                 </span>
                                 <Badge
                                   variant={report.priority === 'urgente' ? 'urgent' : 'default'}
+                                  className="whitespace-nowrap shrink-0"
                                 >
                                   {report.category_name}
                                 </Badge>
                                 {report.is_emergency && (
-                                  <Badge variant="urgent" pulse>
+                                  <Badge variant="urgent" pulse className="whitespace-nowrap shrink-0">
                                     SOS
                                   </Badge>
                                 )}
@@ -527,7 +608,7 @@ export const DashboardView: React.FC = () => {
                               <p className="text-xs text-slate-300 font-medium truncate mt-1">
                                 {report.description}
                               </p>
-                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                              <p className="text-[11px] text-slate-500 font-mono mt-0.5 whitespace-nowrap">
                                 {report.address_reference || 'La Tinguiña, Ica'} •{' '}
                                 {formatTimeAgo(report.created_at)}
                               </p>
@@ -536,8 +617,9 @@ export const DashboardView: React.FC = () => {
 
                           <div className="flex items-center gap-2 shrink-0">
                             <span
-                              className={`text-xs px-2.5 py-1 rounded-lg border font-semibold ${statusStyle.bg}`}
+                              className={`text-xs px-2.5 py-1 rounded-lg border font-semibold whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${statusStyle.bg}`}
                             >
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot} shrink-0`} />
                               {statusStyle.label}
                             </span>
                             <Button variant="ghost" size="icon" aria-label="Ver detalle">
@@ -558,15 +640,15 @@ export const DashboardView: React.FC = () => {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-purple-400" />
-                    <CardTitle>Reportes Urbanos & Serenazgo (MS-03)</CardTitle>
+                    <CardTitle>Reportes Urbanos y Serenazgo (MS-03)</CardTitle>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setActiveTab('community_map')}
-                    className="text-xs"
+                    className="text-xs whitespace-nowrap"
                   >
-                    Ver Mapa <ArrowUpRight className="w-3.5 h-3.5" />
+                    Ver Mapa <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </CardHeader>
 
@@ -583,10 +665,10 @@ export const DashboardView: React.FC = () => {
                         className="p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/70 border border-slate-800/80 cursor-pointer transition-all"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-[11px] font-bold text-purple-400">
+                          <span className="font-mono text-[11px] font-bold text-purple-400 whitespace-nowrap">
                             {report.public_code}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
                             {formatTimeAgo(report.created_at)}
                           </span>
                         </div>
@@ -597,8 +679,8 @@ export const DashboardView: React.FC = () => {
                           {report.description}
                         </p>
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400">
-                          <span>{report.address_reference || 'Sector Tinguiña'}</span>
-                          <span className="text-purple-400 font-bold">
+                          <span className="truncate max-w-[160px]">{report.address_reference || 'Sector Tinguiña'}</span>
+                          <span className="text-purple-400 font-bold whitespace-nowrap shrink-0">
                             {report.shares_count} difusión(es)
                           </span>
                         </div>
@@ -610,7 +692,10 @@ export const DashboardView: React.FC = () => {
 
               {/* Tarjeta de dotación para Admin y Comisario */}
               {['admin', 'comisario'].includes(role) && (
-                <Card className="bg-slate-900/80 border-slate-800/90 p-4">
+                <Card
+                  onClick={() => setActiveTab('officers')}
+                  className="bg-slate-900/80 border-slate-800/90 p-4 cursor-pointer hover:border-sky-500/50 transition-all"
+                >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-sky-400" />
@@ -618,7 +703,7 @@ export const DashboardView: React.FC = () => {
                         Estado de Guardia y Dotación
                       </span>
                     </div>
-                    <span className="text-[11px] text-emerald-400 font-mono font-bold">
+                    <span className="text-[11px] text-emerald-400 font-mono font-bold whitespace-nowrap">
                       {activeOfficersCount} Activos
                     </span>
                   </div>
@@ -645,4 +730,3 @@ export const DashboardView: React.FC = () => {
     </div>
   );
 };
-

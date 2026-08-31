@@ -63,3 +63,5 @@ class CommunityReportDetailResponse(BaseModel):
 class UpdateDerivationStatusRequest(BaseModel):
     new_status: ReportStatus  # derivado, en_atencion, resuelto
     note: str = Field(..., min_length=3, max_length=1000, description="Constancia pública de la derivación o resolución")
+    destination_entity: Optional[str] = None
+    document_number: Optional[str] = None

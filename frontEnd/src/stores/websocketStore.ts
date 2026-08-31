@@ -53,26 +53,37 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         if (pingInterval) clearInterval(pingInterval);
         pingInterval = setInterval(() => {
           if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'ping' }));
+            socket.send('ping');
           }
         }, 25000);
       };
 
       socket.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'PONG' || data.type === 'WELCOME') {
+          if (event.data === 'pong') return;
+          const parsed = JSON.parse(event.data);
+
+          // Ignorar eventos de control o bienvenida
+          if (
+            !parsed ||
+            parsed.event === 'CONNECTED' ||
+            parsed.type === 'PONG' ||
+            parsed.type === 'WELCOME'
+          ) {
             return;
           }
 
+          const eventType = (parsed.event || parsed.event_type || 'NEW_CRIME_REPORT') as LiveAlertEvent['event_type'];
+          const payload = parsed.data || {};
+
           const alertEvent: LiveAlertEvent = {
             id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            event_type: data.event_type || 'NEW_CRIME_REPORT',
-            public_code: data.public_code || 'SIN_CODIGO',
-            priority: data.priority || 'media',
-            category_name: data.category_name || 'Incidente Policial',
-            extra_data: data.extra_data || {},
-            timestamp: data.timestamp || new Date().toISOString(),
+            event_type: eventType,
+            public_code: payload.public_code || parsed.public_code || 'SIN_CODIGO',
+            priority: (payload.priority || parsed.priority || 'media').toLowerCase(),
+            category_name: payload.category_name || parsed.category_name || 'Incidente Policial',
+            extra_data: payload.extra_data || parsed.extra_data || {},
+            timestamp: payload.timestamp || parsed.timestamp || new Date().toISOString(),
             read: false,
           };
 

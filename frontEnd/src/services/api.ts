@@ -10,6 +10,7 @@ import {
   Officer,
   ReportPriority,
   ReportStatus,
+  TransitionOption,
 } from '../types';
 
 const MS01_URL = import.meta.env.VITE_MS01_URL || 'http://localhost:8001';
@@ -191,6 +192,12 @@ class ApiClient {
   }
 
   // --- MS-03: REPORTES CIUDADANOS / COMUNITARIOS ---
+  async listCommunityCategories(): Promise<Category[]> {
+    const res = await fetch(`${MS03_URL}/api/v1/categories/`);
+    if (!res.ok) throw new Error('Error al obtener categorías comunitarias');
+    return res.json();
+  }
+
   async listCommunityReports(params?: {
     status?: string;
     limit?: number;
@@ -232,6 +239,41 @@ class ApiClient {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Error al actualizar reporte vecinal');
+    return res.json();
+  }
+
+  // --- WORKFLOW TRANSITIONS ---
+  async getAvailableTransitions(
+    reportType: 'crime' | 'community',
+    reportId: string
+  ): Promise<TransitionOption[]> {
+    const baseUrl = reportType === 'crime' ? MS02_URL : MS03_URL;
+    const prefix = reportType === 'crime' ? 'police/reports' : 'police/community-reports';
+    const res = await this.fetchWithAuth(`${baseUrl}/api/v1/${prefix}/${reportId}/transitions`);
+    if (!res.ok) throw new Error('Error al obtener transiciones disponibles');
+    return res.json();
+  }
+
+  async executeTransition(
+    reportType: 'crime' | 'community',
+    reportId: string,
+    formData: FormData
+  ): Promise<any> {
+    const baseUrl = reportType === 'crime' ? MS02_URL : MS03_URL;
+    const prefix = reportType === 'crime' ? 'police/reports' : 'police/community-reports';
+    const token = this.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    // Do NOT set Content-Type - browser sets multipart boundary automatically
+    const res = await fetch(`${baseUrl}/api/v1/${prefix}/${reportId}/transition`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al ejecutar transición de estado');
+    }
     return res.json();
   }
 

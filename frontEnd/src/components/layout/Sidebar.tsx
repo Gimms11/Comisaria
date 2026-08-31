@@ -6,7 +6,6 @@ import {
   BookOpen,
   Users,
   Radio,
-  FileText,
 } from 'lucide-react';
 import { useUiStore, ActiveTab } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';

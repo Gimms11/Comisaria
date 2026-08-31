@@ -40,6 +40,8 @@ class ReportStatusResponse(BaseModel):
 class UpdateReportStatusRequest(BaseModel):
     new_status: ReportStatus
     note: Optional[str] = None
+    destination_entity: Optional[str] = None
+    document_number: Optional[str] = None
 
 
 class AddInternalNoteRequest(BaseModel):

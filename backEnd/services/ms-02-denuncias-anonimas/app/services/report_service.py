@@ -13,6 +13,8 @@ from packages.shared.models.report_media import ReportMedia
 from packages.shared.models.status_history import ReportStatusHistory
 from packages.shared.schemas.enums import MediaType, ReportPriority, ReportStatus, ReportType
 from packages.shared.security import hash_followup_code, verify_followup_code
+from packages.shared.state_machine import CrimeStateMachine
+from packages.shared.schemas.state_machine import TransitionOption
 from app.core.config import settings
 from app.schemas.media import SignedMediaResponse
 from app.schemas.report import (
@@ -98,8 +100,10 @@ class ReportService:
                 priority=report.priority.value,
                 category_name=category.name,
                 extra_data={
+                    "report_id": str(report.id),
                     "is_emergency": report.is_emergency,
                     "address": report.address_reference,
+                    "description": report.description,
                 },
             )
         except Exception:
@@ -304,18 +308,57 @@ class ReportService:
         )
 
     @staticmethod
+    async def get_available_transitions(
+        db: AsyncSession, report_id: uuid.UUID, officer: Officer
+    ) -> List[TransitionOption]:
+        query = select(Report).where(Report.id == report_id)
+        result = await db.execute(query)
+        report = result.scalar_one_or_none()
+        if not report:
+            raise ValueError("Denuncia no encontrada")
+        return CrimeStateMachine.get_available_transitions(report.status, officer.role)
+
+    @staticmethod
     async def update_status(
         db: AsyncSession,
         report_id: uuid.UUID,
         officer: Officer,
         new_status: ReportStatus,
         note: Optional[str] = None,
+        evidence_files: Optional[List[bytes]] = None,
+        destination_entity: Optional[str] = None,
+        document_number: Optional[str] = None,
     ) -> Report:
         query = select(Report).where(Report.id == report_id)
         result = await db.execute(query)
         report = result.scalar_one_or_none()
         if not report:
             raise ValueError("Denuncia no encontrada")
+
+        ev_query = select(func.count(ReportMedia.id)).where(ReportMedia.report_id == report_id)
+        ev_res = await db.execute(ev_query)
+        existing_evidence = ev_res.scalar_one()
+        total_evidence = existing_evidence + len(evidence_files or [])
+
+        CrimeStateMachine.validate_transition(
+            current_status=report.status,
+            target_status=new_status,
+            officer_role=officer.role,
+            note=note or "",
+            evidence_count=total_evidence,
+            destination_entity=destination_entity,
+            document_number=document_number,
+        )
+
+        if evidence_files:
+            for file_bytes in evidence_files:
+                await ReportService.attach_media(
+                    db=db,
+                    public_code=report.public_code,
+                    file_bytes=file_bytes,
+                    original_filename="evidencia.jpg",
+                    media_type=MediaType.FOTO
+                )
 
         old_status = report.status
         report.status = new_status
@@ -340,6 +383,7 @@ class ReportService:
                 priority=report.priority.value,
                 category_name="Denuncia",
                 extra_data={
+                    "report_id": str(report.id),
                     "old_status": old_status.value,
                     "new_status": new_status.value,
                 },

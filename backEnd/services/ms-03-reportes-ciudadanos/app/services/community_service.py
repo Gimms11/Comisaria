@@ -22,7 +22,8 @@ from app.schemas.community_report import (
 )
 from app.services.civic_sanitizer import civic_sanitizer
 from app.services.civic_storage import civic_storage
-
+from packages.shared.state_machine import CommunityStateMachine
+from packages.shared.schemas.state_machine import TransitionOption
 broadcast_client = BroadcastClient(
     ms01_url=settings.MS01_INTERNAL_URL,
     internal_service_key=settings.INTERNAL_SERVICE_KEY,
@@ -83,7 +84,11 @@ class CommunityService:
                 public_code=report.public_code,
                 priority=report.priority.value,
                 category_name=category.name,
-                extra_data={"address": report.address_reference},
+                extra_data={
+                    "report_id": str(report.id),
+                    "address": report.address_reference,
+                    "description": report.description,
+                },
             )
         except Exception:
             pass
@@ -236,6 +241,9 @@ class CommunityService:
         officer: Officer,
         new_status: ReportStatus,
         note: str,
+        evidence_files: list = None,
+        destination_entity: str = None,
+        document_number: str = None,
     ) -> Report:
         query = select(Report).where(Report.id == report_id)
         result = await db.execute(query)
@@ -243,8 +251,27 @@ class CommunityService:
         if not report:
             raise ValueError("Reporte no encontrado")
 
+        media_query = select(ReportMedia).where(ReportMedia.report_id == report.id)
+        media_result = await db.execute(media_query)
+        existing_media_count = len(media_result.scalars().all())
+        total_evidence = existing_media_count + len(evidence_files or [])
+
+        CommunityStateMachine.validate_transition(
+            current_status=report.status,
+            target_status=new_status,
+            officer_role=officer.role,
+            note=note or '',
+            evidence_count=total_evidence,
+            destination_entity=destination_entity,
+            document_number=document_number,
+        )
+
         old_status = report.status
         report.status = new_status
+
+        if evidence_files:
+            for file_bytes in evidence_files:
+                await CommunityService.attach_media(db, report.public_code, file_bytes)
 
         history = ReportStatusHistory(
             report_id=report.id,
@@ -256,4 +283,31 @@ class CommunityService:
         db.add(history)
         await db.commit()
         await db.refresh(report)
+
+        try:
+            await broadcast_client.emit_alert(
+                event_type="STATUS_CHANGED",
+                public_code=report.public_code,
+                priority=report.priority.value,
+                category_name="Reporte Comunitario",
+                extra_data={
+                    "report_id": str(report.id),
+                    "old_status": old_status.value,
+                    "new_status": new_status.value,
+                },
+            )
+        except Exception:
+            pass
+
         return report
+
+    @staticmethod
+    async def get_available_transitions(
+        db: AsyncSession, report_id: uuid.UUID, officer: Officer
+    ) -> list:
+        query = select(Report).where(Report.id == report_id)
+        result = await db.execute(query)
+        report = result.scalar_one_or_none()
+        if not report:
+            raise ValueError("Reporte no encontrado")
+        return CommunityStateMachine.get_available_transitions(report.status, officer.role)

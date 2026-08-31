@@ -8,7 +8,7 @@ logger = logging.getLogger("broadcast_client")
 class BroadcastClient:
     """Cliente HTTP asíncrono para notificar eventos en tiempo real al WebSocket Hub (MS-01)."""
 
-    def __init__(self, ms01_url: str, internal_service_key: str, timeout: float = 0.5):
+    def __init__(self, ms01_url: str, internal_service_key: str, timeout: float = 2.0):
         self.ms01_url = ms01_url.rstrip("/")
         self.internal_service_key = internal_service_key
         self.timeout = timeout
@@ -38,7 +38,7 @@ class BroadcastClient:
             "extra_data": extra_data or {},
         }
 
-        timeout_config = httpx.Timeout(self.timeout, connect=0.2)
+        timeout_config = httpx.Timeout(self.timeout, connect=1.0)
         try:
             async with httpx.AsyncClient(timeout=timeout_config) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)

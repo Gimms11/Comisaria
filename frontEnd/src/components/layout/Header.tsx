@@ -6,7 +6,6 @@ import {
   Radio,
   LogOut,
   Bell,
-  User,
   ShieldCheck,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';

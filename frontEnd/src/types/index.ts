@@ -173,6 +173,16 @@ export interface GuideItem {
   updated_at?: string;
 }
 
+export interface TransitionOption {
+  target_status: ReportStatus;
+  label: string;
+  color: string;
+  icon: string;
+  requires_evidence: boolean;
+  requires_destination: boolean;
+  min_note_length: number;
+}
+
 export interface LiveAlertEvent {
   id: string;
   event_type: 'NEW_CRIME_REPORT' | 'NEW_COMMUNITY_REPORT' | 'STATUS_CHANGED';

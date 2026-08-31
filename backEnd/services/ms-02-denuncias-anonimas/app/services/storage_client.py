@@ -16,6 +16,7 @@ class StorageClient:
     def __init__(self):
         self.bucket_name = settings.STORAGE_BUCKET
         self._s3_client = None
+        self._public_s3_client = None
         self._memory_storage = {}  # Fallback en memoria para tests
 
     @property
@@ -38,6 +39,28 @@ class StorageClient:
             except Exception as e:
                 logger.warning(f"No se pudo inicializar cliente S3: {e}")
         return self._s3_client
+
+    @property
+    def public_client(self):
+        if self._public_s3_client is None and settings.STORAGE_ACCESS_KEY:
+            endpoint = settings.STORAGE_PUBLIC_URL or settings.STORAGE_ENDPOINT
+            try:
+                self._public_s3_client = boto3.client(
+                    "s3",
+                    endpoint_url=endpoint,
+                    aws_access_key_id=settings.STORAGE_ACCESS_KEY,
+                    aws_secret_access_key=settings.STORAGE_SECRET_KEY,
+                    config=Config(
+                        signature_version="s3v4",
+                        connect_timeout=1,
+                        read_timeout=1,
+                        retries={"max_attempts": 1},
+                    ),
+                    region_name="us-central1",
+                )
+            except Exception as e:
+                logger.warning(f"No se pudo inicializar cliente S3 público: {e}")
+        return self._public_s3_client
 
     async def upload_bytes(
         self,
@@ -68,7 +91,7 @@ class StorageClient:
     ) -> str:
         """Genera una URL firmada V4 con expiración temporal (15 min por defecto)."""
         ttl = expires_in or settings.STORAGE_SIGNED_URL_EXPIRE_SECONDS
-        s3 = self.client
+        s3 = self.public_client or self.client
         if s3:
             try:
                 url = s3.generate_presigned_url(
@@ -81,7 +104,8 @@ class StorageClient:
                 logger.warning(f"Error generando URL firmada para {storage_path}: {e}")
 
         # Fallback URL simulada
-        return f"http://localhost:9000/{self.bucket_name}/{storage_path}?token=mock_signed_url_ttl_{ttl}"
+        base = settings.STORAGE_PUBLIC_URL or "http://localhost:9000"
+        return f"{base}/{self.bucket_name}/{storage_path}?token=mock_signed_url_ttl_{ttl}"
 
 
 storage_client = StorageClient()
