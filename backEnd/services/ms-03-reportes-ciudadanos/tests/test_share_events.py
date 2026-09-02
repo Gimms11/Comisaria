@@ -62,6 +62,8 @@ async def test_police_derivation_workflow(client: AsyncClient, police_token: str
         json={
             "new_status": "derivado",
             "note": "Derivado a Gerencia de Obras y Serenazgo Municipal mediante Oficio N° 45-2026",
+            "destination_entity": "Gerencia de Obras y Serenazgo",
+            "document_number": "Oficio N° 45-2026",
         },
         headers=headers,
     )

@@ -77,6 +77,7 @@ export interface CommunityReportItem {
   };
   category_name?: string;
   category_id?: string;
+  category_slug?: string;
   description: string;
   address_reference?: string | null;
   status: ReportStatus;

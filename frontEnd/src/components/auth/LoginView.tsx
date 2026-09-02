@@ -4,16 +4,26 @@ import { useAuthStore } from '../../stores/authStore';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { loginSchema, formatZodErrors } from '../../lib/validations';
 
 export const LoginView: React.FC = () => {
-  const { login, isLoading, error } = useAuthStore();
+  const { login, isLoading, error: authError } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
+    const result = loginSchema.safeParse({ email, password });
+    if (!result.success) {
+      setErrors(formatZodErrors(result.error));
+      return;
+    }
+
     try {
-      await login({ email, password });
+      await login(result.data);
     } catch {
       // Error is stored in zustand store
     }
@@ -22,6 +32,7 @@ export const LoginView: React.FC = () => {
   const handleQuickLogin = (quickEmail: string, quickPass: string) => {
     setEmail(quickEmail);
     setPassword(quickPass);
+    setErrors({});
     login({ email: quickEmail, password: quickPass }).catch(() => {});
   };
 
@@ -46,31 +57,37 @@ export const LoginView: React.FC = () => {
         </div>
 
         <Card className="bg-slate-900/90 border-slate-800 shadow-2xl p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-4 text-left">
-            {error && (
+          <form onSubmit={handleSubmit} className="space-y-4 text-left" noValidate>
+            {authError && (
               <div className="p-3 rounded-xl bg-red-950/80 border border-red-500/50 flex items-center gap-2.5 text-xs text-red-300">
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{error}</span>
+                <span>{authError}</span>
               </div>
             )}
 
             <Input
               label="Correo Electrónico Institucional"
               type="email"
-              required
               placeholder="oficial@policia.gob.pe"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              error={errors.email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+              }}
               leftIcon={<Mail className="w-4 h-4 text-slate-400" />}
             />
 
             <Input
               label="Contraseña"
               type="password"
-              required
               placeholder="••••••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              error={errors.password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+              }}
               leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
             />
 

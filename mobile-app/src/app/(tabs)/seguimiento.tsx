@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { StatusBadge, getStatusConfig } from '@/components/ui/StatusBadge';
 import { BorderRadius, Spacing } from '@/constants/theme';
@@ -32,9 +32,20 @@ export default function TrackingScreen() {
   const [result, setResult] = useState<ReportStatusDetail | null>(null);
   const [myReports, setMyReports] = useState<LocalReportReceipt[]>([]);
 
-  useEffect(() => {
-    StorageService.getMyReports().then(setMyReports);
-  }, []);
+  const refreshSavedReports = async () => {
+    try {
+      const saved = await StorageService.getMyReports();
+      setMyReports(saved);
+    } catch (e) {
+      console.warn('Error fetching saved reports:', e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshSavedReports();
+    }, [])
+  );
 
   useEffect(() => {
     if (params.code) {
@@ -85,6 +96,15 @@ export default function TrackingScreen() {
     }
   };
 
+  const handleClearResult = async () => {
+    setResult(null);
+    setPublicCode('');
+    setPin('');
+    setShowPinInput(false);
+    setError(null);
+    await refreshSavedReports();
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { backgroundColor: theme.background }]}
@@ -114,7 +134,7 @@ export default function TrackingScreen() {
             <View style={[styles.iconCircle, { backgroundColor: theme.primaryLight }]}>
               <Feather name="search" size={18} color={theme.primary} />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.searchCardTitle, { color: theme.text }]}>
                 Ingresa tu Código de Denuncia
               </Text>
@@ -122,6 +142,18 @@ export default function TrackingScreen() {
                 Formato oficial: LT-2026-XXXXXX
               </Text>
             </View>
+            {result && (
+              <Pressable
+                onPress={handleClearResult}
+                style={({ pressed }) => [
+                  styles.clearBadgeBtn,
+                  { backgroundColor: theme.backgroundElement, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Feather name="rotate-ccw" size={13} color={theme.primary} />
+                <Text style={[styles.clearBadgeText, { color: theme.primary }]}>Ver todas</Text>
+              </Pressable>
+            )}
           </View>
 
           {/* Input Code */}
@@ -147,9 +179,9 @@ export default function TrackingScreen() {
               autoCapitalize="characters"
               autoCorrect={false}
             />
-            {publicCode.length > 0 && (
-              <Pressable onPress={() => setPublicCode('')}>
-                <Feather name="x" size={16} color={theme.textSecondary} />
+            {(publicCode.length > 0 || result) && (
+              <Pressable onPress={handleClearResult} style={styles.clearIconPressable}>
+                <Feather name="x-circle" size={18} color={theme.textSecondary} />
               </Pressable>
             )}
           </View>
@@ -225,12 +257,15 @@ export default function TrackingScreen() {
           )}
         </View>
 
-        {/* Quick stored codes */}
+        {/* Quick stored codes (shown when no single report is selected) */}
         {myReports.length > 0 && !result && (
           <View style={styles.storedSection}>
-            <Text style={[styles.storedTitle, { color: theme.text }]}>
-              Mis Denuncias y Reportes en este dispositivo:
-            </Text>
+            <View style={styles.storedSectionHeader}>
+              <Feather name="folder" size={16} color={theme.primary} />
+              <Text style={[styles.storedTitle, { color: theme.text }]}>
+                Mis Denuncias y Reportes ({myReports.length}):
+              </Text>
+            </View>
             <View style={styles.storedList}>
               {myReports.map((saved) => (
                 <Pressable
@@ -257,17 +292,51 @@ export default function TrackingScreen() {
                     <Text style={[styles.storedCat, { color: theme.textSecondary }]} numberOfLines={1}>
                       {saved.category_name}
                     </Text>
+                    <Text style={[styles.storedDate, { color: theme.textMuted }]}>
+                      Registrado: {new Date(saved.created_at).toLocaleDateString('es-PE')}
+                    </Text>
                   </View>
-                  <Feather name="arrow-right" size={18} color={theme.primary} />
+                  <View style={[styles.viewReportBtn, { backgroundColor: theme.primaryLight }]}>
+                    <Text style={[styles.viewReportText, { color: theme.primaryDark }]}>Ver</Text>
+                    <Feather name="arrow-right" size={14} color={theme.primaryDark} />
+                  </View>
                 </Pressable>
               ))}
             </View>
           </View>
         )}
 
-        {/* Search Result */}
+        {/* Search Result View */}
         {result && (
           <View style={styles.resultContainer}>
+            {/* Top Back / Return Navigation Button */}
+            <Pressable
+              onPress={handleClearResult}
+              style={({ pressed }) => [
+                styles.backToReportsButton,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.primary,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <View style={styles.backButtonLeft}>
+                <View style={[styles.backIconCircle, { backgroundColor: theme.primaryLight }]}>
+                  <Feather name="arrow-left" size={16} color={theme.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.backButtonTitle, { color: theme.text }]}>
+                    Volver a Mis Denuncias
+                  </Text>
+                  <Text style={[styles.backButtonSub, { color: theme.textSecondary }]}>
+                    Ver la lista de reportes guardados ({myReports.length})
+                  </Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={18} color={theme.primary} />
+            </Pressable>
+
             {/* Status Summary Card */}
             <View
               style={[
@@ -279,7 +348,7 @@ export default function TrackingScreen() {
               ]}
             >
               <View style={styles.resultHeader}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={[styles.resCode, { color: theme.primary }]}>
                     {result.public_code}
                   </Text>
@@ -445,6 +514,61 @@ export default function TrackingScreen() {
                 </View>
               )}
             </View>
+
+            {/* Bottom Quick Switcher & Back Action */}
+            {myReports.length > 1 && (
+              <View style={styles.otherReportsSection}>
+                <Text style={[styles.otherReportsTitle, { color: theme.textSecondary }]}>
+                  OTRAS DENUNCIAS EN TU DISPOSITIVO
+                </Text>
+                <View style={styles.otherReportsList}>
+                  {myReports
+                    .filter((r) => r.public_code !== result.public_code)
+                    .map((other) => (
+                      <Pressable
+                        key={other.public_code}
+                        onPress={() => handleSelectSaved(other)}
+                        style={({ pressed }) => [
+                          styles.otherReportItem,
+                          {
+                            backgroundColor: theme.card,
+                            borderColor: theme.cardBorder,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.otherReportCode, { color: theme.text }]}>
+                            {other.public_code}
+                          </Text>
+                          <Text style={[styles.otherReportCat, { color: theme.textSecondary }]} numberOfLines={1}>
+                            {other.category_name}
+                          </Text>
+                        </View>
+                        <Feather name="arrow-right" size={14} color={theme.primary} />
+                      </Pressable>
+                    ))}
+                </View>
+              </View>
+            )}
+
+            {/* Bottom Back Button */}
+            <Pressable
+              onPress={handleClearResult}
+              style={({ pressed }) => [
+                styles.bottomBackBtn,
+                {
+                  backgroundColor: theme.backgroundElement,
+                  borderColor: theme.cardBorder,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Feather name="arrow-left" size={16} color={theme.text} />
+              <Text style={[styles.bottomBackBtnText, { color: theme.text }]}>
+                Cerrar Detalle y Ver Todas Mis Denuncias
+              </Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -486,6 +610,18 @@ const styles = StyleSheet.create({
   searchCardSub: {
     fontSize: 12,
   },
+  clearBadgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  clearBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -499,6 +635,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
+  },
+  clearIconPressable: {
+    padding: 2,
   },
   pinToggleRow: {
     flexDirection: 'row',
@@ -538,9 +677,14 @@ const styles = StyleSheet.create({
   storedSection: {
     gap: Spacing.two,
   },
+  storedSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   storedTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   storedList: {
     gap: Spacing.two,
@@ -549,7 +693,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.three,
+    padding: Spacing.three + 2,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
   },
@@ -574,8 +718,50 @@ const styles = StyleSheet.create({
   storedCat: {
     fontSize: 12,
   },
+  storedDate: {
+    fontSize: 11,
+  },
+  viewReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+  },
+  viewReportText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
   resultContainer: {
     gap: Spacing.three,
+  },
+  backToReportsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.three,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+  },
+  backButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two + 2,
+  },
+  backIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  backButtonSub: {
+    fontSize: 11,
   },
   resultCard: {
     padding: Spacing.four,
@@ -587,6 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: Spacing.two,
   },
   resCode: {
     fontSize: 18,
@@ -602,33 +789,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    padding: Spacing.two + 2,
+    padding: Spacing.three,
     borderRadius: BorderRadius.md,
   },
   verificationText: {
     fontSize: 12,
-    flex: 1,
     fontWeight: '600',
+    flex: 1,
   },
   descBlock: {
     gap: 4,
   },
   blockLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   blockValue: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
   },
   dateRow: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: 'rgba(255,255,255,0.08)',
     paddingTop: Spacing.two,
   },
   dateLabel: {
-    fontSize: 11,
+    fontSize: 12,
   },
   timelineCard: {
     padding: Spacing.four,
@@ -645,17 +832,17 @@ const styles = StyleSheet.create({
   },
   timelineItem: {
     flexDirection: 'row',
-    minHeight: 60,
+    gap: Spacing.three,
   },
   timelineLeftCol: {
-    width: 24,
     alignItems: 'center',
+    width: 16,
   },
   timelineDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginTop: 4,
+    marginTop: 3,
   },
   timelineLine: {
     width: 2,
@@ -664,18 +851,17 @@ const styles = StyleSheet.create({
   },
   timelineContent: {
     flex: 1,
-    paddingLeft: Spacing.two,
     paddingBottom: Spacing.three,
     gap: 4,
   },
   timelineHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
   },
   timelineStatus: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   timelineDate: {
     fontSize: 11,
@@ -685,6 +871,46 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
     borderRadius: BorderRadius.md,
     marginTop: 2,
-    lineHeight: 16,
+  },
+  otherReportsSection: {
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  otherReportsTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  otherReportsList: {
+    gap: Spacing.two,
+  },
+  otherReportItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.three,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  otherReportCode: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  otherReportCat: {
+    fontSize: 11,
+  },
+  bottomBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.three,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginTop: Spacing.one,
+  },
+  bottomBackBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

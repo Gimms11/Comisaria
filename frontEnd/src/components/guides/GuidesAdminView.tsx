@@ -2,9 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   Plus,
-  Globe,
-  FileText,
-  Paperclip,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { GuideCategory, GuideItem } from '../../types';
@@ -13,6 +10,12 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { GuideAdminCard } from './GuideAdminCard';
+import {
+  guideCreateSchema,
+  guideEditSchema,
+  guideResourceSchema,
+  formatZodErrors,
+} from '../../lib/validations';
 
 export const GuidesAdminView: React.FC = () => {
   const [guides, setGuides] = useState<GuideItem[]>([]);
@@ -23,6 +26,11 @@ export const GuidesAdminView: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
   const [selectedGuideForResource, setSelectedGuideForResource] = useState<GuideItem | null>(null);
+
+  // Form Errors
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [resourceErrors, setResourceErrors] = useState<Record<string, string>>({});
 
   // Forms
   const [newGuideForm, setNewGuideForm] = useState<{
@@ -45,7 +53,13 @@ export const GuidesAdminView: React.FC = () => {
     is_featured: false,
   });
 
-  const [resourceForm, setResourceForm] = useState({
+  const [resourceForm, setResourceForm] = useState<{
+    title: string;
+    resource_type: 'enlace' | 'imagen' | 'texto';
+    external_url: string;
+    media_url: string;
+    body: string;
+  }>({
     title: '',
     resource_type: 'enlace',
     external_url: '',
@@ -121,22 +135,32 @@ export const GuidesAdminView: React.FC = () => {
       category_id: guide.category_id || '',
       main_video_url: guide.main_video_url || '',
     });
+    setEditErrors({});
     setIsEditModalOpen(true);
   };
 
   const handleUpdateGuide = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingGuide) return;
+    setEditErrors({});
+
+    const result = guideEditSchema.safeParse(editGuideForm);
+    if (!result.success) {
+      setEditErrors(formatZodErrors(result.error));
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await api.updateGuide(editingGuide.id, {
-        title: editGuideForm.title,
-        summary: editGuideForm.summary,
-        category_id: editGuideForm.category_id || undefined,
-        main_video_url: editGuideForm.main_video_url || undefined,
+        title: result.data.title,
+        summary: result.data.summary,
+        category_id: result.data.category_id || undefined,
+        main_video_url: result.data.main_video_url || undefined,
       });
       setIsEditModalOpen(false);
       setEditingGuide(null);
+      setEditErrors({});
       await fetchGuides();
     } catch (err: any) {
       alert(err.message || 'Error al actualizar la guía');
@@ -147,14 +171,21 @@ export const GuidesAdminView: React.FC = () => {
 
   const handleCreateGuide = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateErrors({});
+
+    const result = guideCreateSchema.safeParse(newGuideForm);
+    if (!result.success) {
+      setCreateErrors(formatZodErrors(result.error));
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await api.createGuide({
-        ...newGuideForm,
-        category_id: newGuideForm.category_id || undefined,
+        ...result.data,
+        category_id: result.data.category_id || undefined,
       });
       setIsCreateModalOpen(false);
-      fetchGuides();
       setNewGuideForm({
         title: '',
         summary: '',
@@ -165,7 +196,8 @@ export const GuidesAdminView: React.FC = () => {
         transcript: '',
         is_featured: false,
       });
-      fetchGuides();
+      setCreateErrors({});
+      await fetchGuides();
     } catch (err: any) {
       alert(err.message || 'Error al crear guía');
     } finally {
@@ -176,10 +208,17 @@ export const GuidesAdminView: React.FC = () => {
   const handleAddResource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedGuideForResource) return;
+    setResourceErrors({});
+
+    const result = guideResourceSchema.safeParse(resourceForm);
+    if (!result.success) {
+      setResourceErrors(formatZodErrors(result.error));
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-      await api.addGuideResource(selectedGuideForResource.id, resourceForm);
+      await api.addGuideResource(selectedGuideForResource.id, result.data);
       setIsResourceModalOpen(false);
       setResourceForm({
         title: '',
@@ -188,7 +227,8 @@ export const GuidesAdminView: React.FC = () => {
         media_url: '',
         body: '',
       });
-      fetchGuides();
+      setResourceErrors({});
+      await fetchGuides();
     } catch (err: any) {
       alert(err.message || 'Error al adjuntar recurso');
     } finally {
@@ -212,8 +252,11 @@ export const GuidesAdminView: React.FC = () => {
         <Button
           variant="primary"
           size="sm"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="gap-2"
+          onClick={() => {
+            setCreateErrors({});
+            setIsCreateModalOpen(true);
+          }}
+          className="gap-2 whitespace-nowrap shrink-0"
         >
           <Plus className="w-4 h-4" /> Crear Guía
         </Button>
@@ -240,6 +283,7 @@ export const GuidesAdminView: React.FC = () => {
               onDelete={handleDeleteGuide}
               onAttachResource={(selected) => {
                 setSelectedGuideForResource(selected);
+                setResourceErrors({});
                 setIsResourceModalOpen(true);
               }}
             />
@@ -253,26 +297,32 @@ export const GuidesAdminView: React.FC = () => {
         onClose={() => {
           setIsEditModalOpen(false);
           setEditingGuide(null);
+          setEditErrors({});
         }}
         title={`Editar Guía: ${editingGuide?.title || ''}`}
         subtitle="Actualiza el contenido, categoría o enlace de video de la guía"
         maxWidth="2xl"
       >
-        <form onSubmit={handleUpdateGuide} className="space-y-4 text-left">
+        <form onSubmit={handleUpdateGuide} className="space-y-4 text-left" noValidate>
           <Input
             label="Título de la Guía"
-            required
             placeholder="Ej: Cómo denunciar pérdida de DNI por internet"
             value={editGuideForm.title}
-            onChange={(e) => setEditGuideForm((prev) => ({ ...prev, title: e.target.value }))}
+            error={editErrors.title}
+            onChange={(e) => {
+              setEditGuideForm((prev) => ({ ...prev, title: e.target.value }));
+              if (editErrors.title) setEditErrors((prev) => ({ ...prev, title: '' }));
+            }}
           />
 
           <Select
             label="Categoría"
             value={editGuideForm.category_id}
-            onChange={(e) =>
-              setEditGuideForm((prev) => ({ ...prev, category_id: e.target.value }))
-            }
+            error={editErrors.category_id}
+            onChange={(e) => {
+              setEditGuideForm((prev) => ({ ...prev, category_id: e.target.value }));
+              if (editErrors.category_id) setEditErrors((prev) => ({ ...prev, category_id: '' }));
+            }}
             options={[
               { value: '', label: 'Sin categoría' },
               ...categories.map((c) => ({ value: c.id, label: c.name })),
@@ -283,9 +333,11 @@ export const GuidesAdminView: React.FC = () => {
             label="URL del Video de TikTok (dejar igual o pegar uno nuevo)"
             placeholder="https://www.tiktok.com/@comisaria/video/..."
             value={editGuideForm.main_video_url}
-            onChange={(e) =>
-              setEditGuideForm((prev) => ({ ...prev, main_video_url: e.target.value }))
-            }
+            error={editErrors.main_video_url}
+            onChange={(e) => {
+              setEditGuideForm((prev) => ({ ...prev, main_video_url: e.target.value }));
+              if (editErrors.main_video_url) setEditErrors((prev) => ({ ...prev, main_video_url: '' }));
+            }}
           />
 
           <div className="space-y-1.5">
@@ -294,14 +346,17 @@ export const GuidesAdminView: React.FC = () => {
             </label>
             <textarea
               rows={3}
-              required
               placeholder="1. Ingrese a la plataforma... 2. Siga los pasos..."
               value={editGuideForm.summary}
-              onChange={(e) =>
-                setEditGuideForm((prev) => ({ ...prev, summary: e.target.value }))
-              }
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+              onChange={(e) => {
+                setEditGuideForm((prev) => ({ ...prev, summary: e.target.value }));
+                if (editErrors.summary) setEditErrors((prev) => ({ ...prev, summary: '' }));
+              }}
+              className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-all ${
+                editErrors.summary ? 'border-red-500 focus:border-red-500' : 'border-slate-700/80 focus:border-sky-500'
+              }`}
             />
+            {editErrors.summary && <p className="text-xs text-red-400 font-medium">{editErrors.summary}</p>}
           </div>
 
           <Button
@@ -319,26 +374,34 @@ export const GuidesAdminView: React.FC = () => {
       {/* Create Guide Modal */}
       <Modal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setCreateErrors({});
+        }}
         title="Crear Nueva Guía Cívica"
         subtitle="Publicación de tutoriales, requisitos y trámites para la ciudadanía"
         maxWidth="2xl"
       >
-        <form onSubmit={handleCreateGuide} className="space-y-4 text-left">
+        <form onSubmit={handleCreateGuide} className="space-y-4 text-left" noValidate>
           <Input
             label="Título de la Guía"
-            required
             placeholder="Ej: Cómo denunciar pérdida de DNI por internet"
             value={newGuideForm.title}
-            onChange={(e) => setNewGuideForm((prev) => ({ ...prev, title: e.target.value }))}
+            error={createErrors.title}
+            onChange={(e) => {
+              setNewGuideForm((prev) => ({ ...prev, title: e.target.value }));
+              if (createErrors.title) setCreateErrors((prev) => ({ ...prev, title: '' }));
+            }}
           />
 
           <Select
             label="Categoría"
             value={newGuideForm.category_id}
-            onChange={(e) =>
-              setNewGuideForm((prev) => ({ ...prev, category_id: e.target.value }))
-            }
+            error={createErrors.category_id}
+            onChange={(e) => {
+              setNewGuideForm((prev) => ({ ...prev, category_id: e.target.value }));
+              if (createErrors.category_id) setCreateErrors((prev) => ({ ...prev, category_id: '' }));
+            }}
             options={[
               { value: '', label: 'Seleccione una categoría' },
               ...categories.map((c) => ({ value: c.id, label: c.name })),
@@ -349,9 +412,11 @@ export const GuidesAdminView: React.FC = () => {
             label="URL del Video de TikTok"
             placeholder="https://www.tiktok.com/@comisaria/video/... o https://vm.tiktok.com/..."
             value={newGuideForm.main_video_url}
-            onChange={(e) =>
-              setNewGuideForm((prev) => ({ ...prev, main_video_url: e.target.value }))
-            }
+            error={createErrors.main_video_url}
+            onChange={(e) => {
+              setNewGuideForm((prev) => ({ ...prev, main_video_url: e.target.value }));
+              if (createErrors.main_video_url) setCreateErrors((prev) => ({ ...prev, main_video_url: '' }));
+            }}
           />
 
           <div className="space-y-1.5">
@@ -360,14 +425,17 @@ export const GuidesAdminView: React.FC = () => {
             </label>
             <textarea
               rows={3}
-              required
               placeholder="1. Ingrese a la plataforma de la PNP&#10;2. Adjunte su número de DNI&#10;3. Descargue el certificado oficial..."
               value={newGuideForm.summary}
-              onChange={(e) =>
-                setNewGuideForm((prev) => ({ ...prev, summary: e.target.value }))
-              }
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+              onChange={(e) => {
+                setNewGuideForm((prev) => ({ ...prev, summary: e.target.value }));
+                if (createErrors.summary) setCreateErrors((prev) => ({ ...prev, summary: '' }));
+              }}
+              className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-all ${
+                createErrors.summary ? 'border-red-500 focus:border-red-500' : 'border-slate-700/80 focus:border-sky-500'
+              }`}
             />
+            {createErrors.summary && <p className="text-xs text-red-400 font-medium">{createErrors.summary}</p>}
           </div>
 
           <Button
@@ -389,7 +457,10 @@ export const GuidesAdminView: React.FC = () => {
       {/* Attach Resource Modal */}
       <Modal
         isOpen={isResourceModalOpen}
-        onClose={() => setIsResourceModalOpen(false)}
+        onClose={() => {
+          setIsResourceModalOpen(false);
+          setResourceErrors({});
+        }}
         title={
           selectedGuideForResource
             ? `Adjuntar Recurso: ${selectedGuideForResource.title}`
@@ -398,21 +469,26 @@ export const GuidesAdminView: React.FC = () => {
         subtitle="Agregue formatos oficiales PDF descargables o enlaces de derivación"
         maxWidth="lg"
       >
-        <form onSubmit={handleAddResource} className="space-y-4 text-left">
+        <form onSubmit={handleAddResource} className="space-y-4 text-left" noValidate>
           <Input
             label="Nombre del Recurso"
-            required
             placeholder="Ej: Formato de Solicitud de Constancia PDF"
             value={resourceForm.title}
-            onChange={(e) => setResourceForm((prev) => ({ ...prev, title: e.target.value }))}
+            error={resourceErrors.title}
+            onChange={(e) => {
+              setResourceForm((prev) => ({ ...prev, title: e.target.value }));
+              if (resourceErrors.title) setResourceErrors((prev) => ({ ...prev, title: '' }));
+            }}
           />
 
           <Select
             label="Tipo de Recurso"
             value={resourceForm.resource_type}
-            onChange={(e) =>
-              setResourceForm((prev) => ({ ...prev, resource_type: e.target.value }))
-            }
+            error={resourceErrors.resource_type}
+            onChange={(e) => {
+              setResourceForm((prev) => ({ ...prev, resource_type: e.target.value as 'enlace' | 'imagen' | 'texto' }));
+              if (resourceErrors.resource_type) setResourceErrors((prev) => ({ ...prev, resource_type: '' }));
+            }}
             options={[
               { value: 'enlace', label: 'Enlace Web Oficial (ej: Reclamaciones Gob.pe)' },
               { value: 'imagen', label: 'Infografía / Diagrama de Pasos' },
@@ -421,12 +497,14 @@ export const GuidesAdminView: React.FC = () => {
           />
 
           <Input
-            label="URL Externa o Archivo"
+            label="URL Externa o Enlace de Descarga"
             placeholder="https://www.gob.pe/pnp/..."
             value={resourceForm.external_url}
-            onChange={(e) =>
-              setResourceForm((prev) => ({ ...prev, external_url: e.target.value }))
-            }
+            error={resourceErrors.external_url}
+            onChange={(e) => {
+              setResourceForm((prev) => ({ ...prev, external_url: e.target.value }));
+              if (resourceErrors.external_url) setResourceErrors((prev) => ({ ...prev, external_url: '' }));
+            }}
           />
 
           <Button type="submit" variant="primary" size="sm" className="w-full" isLoading={isSubmitting}>

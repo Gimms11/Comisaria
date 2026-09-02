@@ -2,6 +2,9 @@ import { Platform } from 'react-native';
 
 // Helper to determine the best host IP for dev environments
 const getLocalHost = () => {
+  if (process.env.EXPO_PUBLIC_API_HOST) {
+    return process.env.EXPO_PUBLIC_API_HOST;
+  }
   if (Platform.OS === 'android') {
     // Android emulator host loopback
     return '10.0.2.2';
@@ -25,6 +28,15 @@ export const API_CONFIG = {
   GUIDES_BASE_URL: `http://${HOST}:8004/api/v1`,
 
   TIMEOUT_MS: 12000,
+};
+
+export const resolveMediaUrl = (url?: string | null): string | null => {
+  if (!url) return null;
+  if (Platform.OS === 'android' && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+    // Reemplaza localhost por 10.0.2.2 y quita query parameters de firma para acceso directo anónimo
+    return url.split('?')[0].replace(/localhost|127\.0\.0\.1/g, HOST);
+  }
+  return url;
 };
 
 export const EMERGENCY_NUMBERS = [

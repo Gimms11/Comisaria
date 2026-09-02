@@ -37,7 +37,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 lg:px-8 py-3">
+    <header className="shrink-0 z-40 w-full glass-panel border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 lg:px-8 py-3">
       <div className="flex items-center justify-between gap-4">
         {/* Left: Badge & Live Hub Indicator */}
         <div className="flex items-center gap-3.5">

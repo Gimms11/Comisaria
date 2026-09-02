@@ -63,7 +63,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-full lg:w-64 glass-panel border-r border-slate-800/80 bg-slate-950/60 p-4 flex flex-col justify-between shrink-0">
+    <aside className="w-full lg:w-64 lg:min-w-[16rem] lg:max-w-[16rem] shrink-0 flex-shrink-0 h-full glass-panel border-r border-slate-800/80 bg-slate-950/60 p-4 flex flex-col justify-between overflow-y-auto">
       <div className="space-y-1.5">
         <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
           Módulos Operativos

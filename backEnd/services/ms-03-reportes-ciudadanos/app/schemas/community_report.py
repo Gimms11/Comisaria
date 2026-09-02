@@ -26,7 +26,9 @@ class PublicCommunityReportResponse(BaseModel):
 class CommunityReportListItem(BaseModel):
     id: uuid.UUID
     public_code: str
+    category_id: Optional[uuid.UUID] = None
     category_name: str
+    category_slug: Optional[str] = None
     status: ReportStatus
     priority: ReportPriority
     description: str

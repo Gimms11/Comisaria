@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   MapPin,
   Share2,
@@ -33,7 +33,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles } from '../../lib/utils';
+import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles, resolveMediaUrl } from '../../lib/utils';
 
 // Custom Leaflet Icons using SVG
 const createCustomIcon = (color: string) => {
@@ -117,9 +117,8 @@ const MapBridge: React.FC<{
   useEffect(() => {
     if (resetSignal > 0) {
       map.setView(DEFAULT_CENTER, 14, { animate: true });
-      onZoomChange(14);
     }
-  }, [resetSignal, map, onZoomChange]);
+  }, [resetSignal, map]);
 
   return null;
 };
@@ -161,9 +160,8 @@ export const CommunityMapView: React.FC = () => {
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
   const [evidenceInitialIndex, setEvidenceInitialIndex] = useState(0);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     try {
-      setIsLoading(true);
       const res = await api.listCommunityReports({ limit: 200 });
       setReports(res?.items || []);
     } catch (e) {
@@ -171,20 +169,47 @@ export const CommunityMapView: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const cats = await api.listCommunityCategories();
       setCategories(cats);
     } catch (e) {
       console.warn('Error al listar categorías comunitarias:', e);
     }
+  }, []);
+
+  const handleManualRefresh = () => {
+    setIsLoading(true);
+    fetchReports();
   };
 
   useEffect(() => {
-    fetchReports();
-    fetchCategories();
+    let isMounted = true;
+
+    const loadInitialData = async () => {
+      try {
+        const [reportsRes, catsRes] = await Promise.all([
+          api.listCommunityReports({ limit: 200 }),
+          api.listCommunityCategories(),
+        ]);
+        if (isMounted) {
+          setReports(reportsRes?.items || []);
+          setCategories(catsRes || []);
+          setIsLoading(false);
+        }
+      } catch (e) {
+        console.warn('Error al cargar datos comunitarios:', e);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadInitialData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Recarga reactiva en tiempo real al registrarse reporte comunitario o cambiar estado
@@ -195,17 +220,29 @@ export const CommunityMapView: React.FC = () => {
     ) {
       fetchReports();
     }
-  }, [latestAlert]);
+  }, [latestAlert, fetchReports]);
 
   // Cargar detalle del modal
   useEffect(() => {
     if (selectedCommunityReportCode) {
+      let isMounted = true;
       setIsLoadingDetail(true);
       api
         .getCommunityReportByCode(selectedCommunityReportCode)
-        .then((data) => setSelectedReport(data))
-        .catch((err) => console.error('Error al cargar reporte vecinal:', err))
-        .finally(() => setIsLoadingDetail(false));
+        .then((data) => {
+          if (isMounted) {
+            setSelectedReport(data);
+            setIsLoadingDetail(false);
+          }
+        })
+        .catch((err) => {
+          console.error('Error al cargar reporte vecinal:', err);
+          if (isMounted) setIsLoadingDetail(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
     } else {
       setSelectedReport(null);
     }
@@ -232,13 +269,34 @@ export const CommunityMapView: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Reset page to 1 whenever any filter or search query changes
-  useEffect(() => {
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, priorityFilter, categoryIdFilter, dateRangeFilter]);
+  };
+
+  const handleStatusFilterChange = (val: string) => {
+    setStatusFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handlePriorityFilterChange = (val: string) => {
+    setPriorityFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleCategoryFilterChange = (val: string) => {
+    setCategoryIdFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleDateRangeFilterChange = (val: string) => {
+    setDateRangeFilter(val);
+    setCurrentPage(1);
+  };
 
   const handleResetMapView = () => {
     setResetMapSignal((prev) => prev + 1);
+    setMapZoom(14);
   };
 
   const getZoomLabel = (zoom: number) => {
@@ -430,7 +488,7 @@ export const CommunityMapView: React.FC = () => {
               Limpiar Filtros
             </Button>
           )}
-          <Button variant="primary" size="sm" onClick={fetchReports} className="whitespace-nowrap">
+          <Button variant="primary" size="sm" onClick={handleManualRefresh} className="whitespace-nowrap">
             Refrescar
           </Button>
         </div>
@@ -439,7 +497,7 @@ export const CommunityMapView: React.FC = () => {
       {/* Quick Status Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         <button
-          onClick={() => setStatusFilter('')}
+          onClick={() => handleStatusFilterChange('')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             !statusFilter
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
@@ -453,7 +511,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('pendiente')}
+          onClick={() => handleStatusFilterChange('pendiente')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'pendiente'
               ? 'bg-yellow-600 text-white shadow-md shadow-yellow-600/30'
@@ -468,7 +526,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('en_revision')}
+          onClick={() => handleStatusFilterChange('en_revision')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'en_revision'
               ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
@@ -483,7 +541,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('derivado')}
+          onClick={() => handleStatusFilterChange('derivado')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'derivado'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
@@ -498,7 +556,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('en_atencion')}
+          onClick={() => handleStatusFilterChange('en_atencion')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'en_atencion'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
@@ -513,7 +571,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('resuelto')}
+          onClick={() => handleStatusFilterChange('resuelto')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'resuelto'
               ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
@@ -528,7 +586,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('archivado')}
+          onClick={() => handleStatusFilterChange('archivado')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'archivado'
               ? 'bg-slate-600 text-white shadow-md shadow-slate-600/30'
@@ -543,7 +601,7 @@ export const CommunityMapView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setStatusFilter('rechazado')}
+          onClick={() => handleStatusFilterChange('rechazado')}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             statusFilter === 'rechazado'
               ? 'bg-rose-700 text-white shadow-md shadow-rose-700/30'
@@ -564,13 +622,13 @@ export const CommunityMapView: React.FC = () => {
           <Input
             placeholder="Buscar código (LT-2026-...), calle o detalle..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             leftIcon={<Search className="w-4 h-4 text-slate-400" />}
           />
 
           <Select
             value={categoryIdFilter}
-            onChange={(e) => setCategoryIdFilter(e.target.value)}
+            onChange={(e) => handleCategoryFilterChange(e.target.value)}
             options={[
               { value: '', label: 'Todas las Categorías' },
               ...categories.map((c) => ({ value: c.id, label: c.name })),
@@ -579,7 +637,7 @@ export const CommunityMapView: React.FC = () => {
 
           <Select
             value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
+            onChange={(e) => handlePriorityFilterChange(e.target.value)}
             options={[
               { value: '', label: 'Todas las Prioridades' },
               { value: 'urgente', label: 'Urgente' },
@@ -591,7 +649,7 @@ export const CommunityMapView: React.FC = () => {
 
           <Select
             value={dateRangeFilter}
-            onChange={(e) => setDateRangeFilter(e.target.value)}
+            onChange={(e) => handleDateRangeFilterChange(e.target.value)}
             options={[
               { value: 'all', label: 'Todas las Fechas' },
               { value: 'today', label: 'Hoy' },
@@ -602,7 +660,7 @@ export const CommunityMapView: React.FC = () => {
 
           <Select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => handleStatusFilterChange(e.target.value)}
             options={[
               { value: '', label: 'Todos los Estados' },
               { value: 'pendiente', label: 'Pendiente' },
@@ -1086,7 +1144,7 @@ export const CommunityMapView: React.FC = () => {
                       className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center cursor-pointer hover:border-purple-500/60 transition-all shadow-md"
                     >
                       <img
-                        src={url}
+                        src={resolveMediaUrl(url)}
                         alt={`Evidencia urbana ${idx + 1}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />

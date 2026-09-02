@@ -7,6 +7,10 @@ import { Badge } from './Badge';
 import { TransitionOption, ReportStatus } from '../../types';
 import { getStatusStyles } from '../../lib/utils';
 import {
+  createWorkflowTransitionSchema,
+  formatZodErrors,
+} from '../../lib/validations';
+import {
   CheckCircle2,
   XCircle,
   Send,
@@ -127,7 +131,8 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
   const [loading, setLoading] = useState(true);
   const [selectedTransition, setSelectedTransition] = useState<TransitionOption | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [note, setNote] = useState('');
   const [destinationEntity, setDestinationEntity] = useState('');
@@ -157,45 +162,59 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
     setDestinationEntity('');
     setDocumentNumber('');
     setFiles([]);
-    setError(null);
+    setGlobalError(null);
+    setFieldErrors({});
     setIsModalOpen(true);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      const selected = Array.from(e.target.files);
+      setFiles((prev) => [...prev, ...selected]);
+      if (fieldErrors.files) setFieldErrors((prev) => ({ ...prev, files: '' }));
     }
   };
 
   const removeFile = (index: number) => {
-    setFiles(files.filter((_, i) => i !== index));
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTransition) return;
-    if (selectedTransition.min_note_length > 0 && note.length < selectedTransition.min_note_length) {
-      setError(`La nota debe tener al menos ${selectedTransition.min_note_length} caracteres.`);
-      return;
-    }
-    if (selectedTransition.requires_evidence && files.length === 0) {
-      setError('Debe adjuntar al menos un archivo de evidencia.');
-      return;
-    }
-    if (selectedTransition.requires_destination && !destinationEntity) {
-      setError('Debe seleccionar la entidad de destino.');
+    setGlobalError(null);
+    setFieldErrors({});
+
+    // Dynamic Zod Validation based on transition contract
+    const schema = createWorkflowTransitionSchema({
+      minNoteLength: selectedTransition.min_note_length,
+      requiresEvidence: selectedTransition.requires_evidence,
+      requiresDestination: selectedTransition.requires_destination,
+    });
+
+    const validationResult = schema.safeParse({
+      note,
+      destination_entity: destinationEntity || undefined,
+      document_number: documentNumber || undefined,
+      files,
+    });
+
+    if (!validationResult.success) {
+      setFieldErrors(formatZodErrors(validationResult.error));
       return;
     }
 
     try {
       setSubmitting(true);
-      setError(null);
+      setGlobalError(null);
       const formData = new FormData();
       formData.append('target_status', selectedTransition.target_status);
-      formData.append('note', note);
-      if (selectedTransition.requires_destination) {
-        formData.append('destination_entity', destinationEntity);
-        if (documentNumber) formData.append('document_number', documentNumber);
+      formData.append('note', validationResult.data.note);
+      if (selectedTransition.requires_destination && validationResult.data.destination_entity) {
+        formData.append('destination_entity', validationResult.data.destination_entity);
+        if (validationResult.data.document_number) {
+          formData.append('document_number', validationResult.data.document_number);
+        }
       }
       files.forEach((file) => {
         formData.append('evidence_files', file);
@@ -205,7 +224,7 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
       setIsModalOpen(false);
       onTransitionComplete();
     } catch (err: any) {
-      setError(err.message || 'Error al ejecutar transición');
+      setGlobalError(err.message || 'Error al ejecutar transición de estado');
     } finally {
       setSubmitting(false);
     }
@@ -233,7 +252,7 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
   const entities = reportType === 'crime' ? crimeEntities : communityEntities;
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-6">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-6 text-left">
       {/* Header with Title and Current Status Badge */}
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
         <div>
@@ -250,95 +269,80 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
         </div>
       </div>
 
-      {/* Stepper */}
-      {!isTerminal && (
-        <div className="pt-2 pb-6 px-3">
-          <div className="relative flex items-center justify-between w-full">
-            {/* Background Line */}
-            <div className="absolute left-0 top-4 -translate-y-1/2 w-full h-1 bg-slate-800 rounded-full" />
-            {/* Active Progress Line */}
-            <div
-              className="absolute left-0 top-4 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500"
-              style={{
-                width: `${Math.max(0, (currentStepIndex / (steps.length - 1)) * 100)}%`,
-              }}
-            />
-            {steps.map((step, idx) => {
-              const isCompleted = currentStepIndex >= idx;
-              const isCurrent = currentStepIndex === idx;
-              return (
-                <div key={step.key} className="relative z-10 flex flex-col items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                      isCurrent
-                        ? 'bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-500/40 scale-110'
-                        : isCompleted
-                        ? 'bg-sky-900/80 border-sky-500 text-sky-300'
-                        : 'bg-slate-950 border-slate-700 text-slate-600'
-                    }`}
-                  >
-                    {isCompleted && !isCurrent ? (
-                      <CheckCircle2 className="w-4 h-4 text-sky-400" />
-                    ) : isCurrent ? (
-                      <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                    ) : (
-                      <span className="text-xs font-mono">{idx + 1}</span>
-                    )}
-                  </div>
-                  <div className="text-center mt-2">
-                    <p
-                      className={`text-xs font-bold whitespace-nowrap transition-colors ${
-                        isCurrent ? 'text-sky-300' : isCompleted ? 'text-slate-300' : 'text-slate-500'
-                      }`}
-                    >
-                      {step.label}
-                    </p>
-                    <p className="text-[10px] text-slate-500 whitespace-nowrap font-mono">
-                      {step.sublabel}
-                    </p>
-                  </div>
+      {/* Lifecycle Stepper */}
+      <div className="relative pt-2 pb-1">
+        <div className="grid grid-cols-4 gap-2 relative">
+          {/* Connector Line */}
+          <div className="absolute top-4 left-[12.5%] right-[12.5%] h-0.5 bg-slate-800 -z-0" />
+          <div
+            className="absolute top-4 left-[12.5%] h-0.5 bg-sky-500 transition-all duration-500 -z-0"
+            style={{
+              width:
+                isTerminal || currentStepIndex === -1
+                  ? '0%'
+                  : `${(currentStepIndex / (steps.length - 1)) * 75}%`,
+            }}
+          />
+
+          {steps.map((step, idx) => {
+            const isCompleted = !isTerminal && idx < currentStepIndex;
+            const isCurrent = !isTerminal && idx === currentStepIndex;
+
+            return (
+              <div key={step.key} className="flex flex-col items-center text-center relative z-10">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold font-mono transition-all duration-300 ${
+                    isCompleted
+                      ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/30'
+                      : isCurrent
+                      ? 'bg-sky-600 text-white ring-4 ring-sky-500/20 shadow-lg shadow-sky-600/40'
+                      : 'bg-slate-800 text-slate-500 border border-slate-700'
+                  }`}
+                >
+                  {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
                 </div>
-              );
-            })}
-          </div>
+                <span
+                  className={`text-xs font-semibold mt-2 whitespace-nowrap ${
+                    isCurrent ? 'text-sky-400' : isCompleted ? 'text-slate-200' : 'text-slate-500'
+                  }`}
+                >
+                  {step.label}
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono hidden sm:inline whitespace-nowrap">
+                  {step.sublabel}
+                </span>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
-      {/* Terminal States (if applicable) */}
-      {isTerminal && (
-        <div className="p-4 bg-rose-950/30 border border-rose-500/40 rounded-xl flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-          <div className="text-left">
-            <p className="text-xs font-bold text-rose-300 uppercase font-mono">
-              Reporte {currentStatus === 'archivado' ? 'Archivado' : 'Rechazado'}
-            </p>
-            <p className="text-xs text-rose-400/90 mt-0.5">
-              Este caso se encuentra en estado terminal. Para reabrirlo se requiere autorización de Comisario o Administrador con fundamentación.
-            </p>
-          </div>
+      {/* Action Buttons Hub */}
+      <div className="pt-2 border-t border-slate-800/80">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono mb-3">
+          Acciones Disponibles de Turno
         </div>
-      )}
 
-      {/* Actions */}
-      <div>
-        <h4 className="text-sm font-medium text-slate-400 mb-3">Acciones Disponibles</h4>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
           {loading ? (
-            <div className="text-sm text-slate-500">Cargando acciones...</div>
+            <div className="text-xs text-slate-500 py-2">Cargando transiciones...</div>
           ) : transitions.length === 0 ? (
-            <div className="text-sm text-slate-500">No hay acciones disponibles en el estado actual.</div>
+            <div className="text-xs text-slate-500 italic py-1">
+              No hay transiciones disponibles para su rol en este estado.
+            </div>
           ) : (
-            transitions.map(transition => {
-              const Icon = ICON_MAP[transition.icon] || CheckCircle2;
-              const colorClass = COLOR_MAP[transition.color] || COLOR_MAP.slate;
+            transitions.map((transition) => {
+              const Icon = ICON_MAP[transition.icon] || Send;
+              const colorClass = COLOR_MAP[transition.color] || COLOR_MAP.sky;
+
               return (
                 <button
                   key={transition.target_status}
                   onClick={() => openModal(transition)}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${colorClass}`}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${colorClass} whitespace-nowrap`}
                 >
-                  <Icon className="w-4 h-4" />
-                  {transition.label}
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{transition.label}</span>
                 </button>
               );
             })
@@ -346,35 +350,43 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Transition Modal */}
       {selectedTransition && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => !submitting && setIsModalOpen(false)}
           title={selectedTransition.label}
+          subtitle={`Transición de estado hacia "${selectedTransition.target_status}"`}
         >
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-900/20 border border-red-900/50 rounded-md flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                <span className="text-sm text-red-400">{error}</span>
+          <form onSubmit={handleSubmit} className="space-y-4 text-left" noValidate>
+            {globalError && (
+              <div className="p-3 bg-red-950/80 border border-red-500/50 rounded-xl flex items-start gap-2.5 text-xs text-red-300">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{globalError}</span>
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Nota u Observación {selectedTransition.min_note_length > 0 && '*'}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                Nota u Observación de Constancia {selectedTransition.min_note_length > 0 && '*'}
               </label>
               <textarea
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="w-full bg-slate-800 border-slate-700 rounded-md text-slate-200 placeholder:text-slate-500 min-h-[100px] resize-none"
-                placeholder="Ingrese los detalles de esta acción..."
-                required={selectedTransition.min_note_length > 0}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  if (fieldErrors.note) setFieldErrors((prev) => ({ ...prev, note: '' }));
+                }}
+                className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 min-h-[100px] resize-none focus:outline-none transition-all ${
+                  fieldErrors.note ? 'border-red-500 focus:border-red-500' : 'border-slate-700/80 focus:border-sky-500'
+                }`}
+                placeholder="Ingrese los detalles y fundamentación de esta acción policial..."
               />
-              <div className="flex justify-end mt-1">
-                <span className={`text-xs ${note.length < selectedTransition.min_note_length ? 'text-amber-500' : 'text-slate-500'}`}>
-                  {note.length} / {selectedTransition.min_note_length || 0} min
+              <div className="flex justify-between items-center mt-1">
+                {fieldErrors.note ? (
+                  <p className="text-xs text-red-400 font-medium">{fieldErrors.note}</p>
+                ) : <span />}
+                <span className={`text-[11px] font-mono ${note.length < selectedTransition.min_note_length ? 'text-amber-400' : 'text-slate-400'}`}>
+                  {note.length} / {selectedTransition.min_note_length || 0} car. mín.
                 </span>
               </div>
             </div>
@@ -384,29 +396,46 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
                 <Select
                   label="Entidad de Destino *"
                   value={destinationEntity}
-                  onChange={(e) => setDestinationEntity(e.target.value)}
+                  error={fieldErrors.destination_entity}
+                  onChange={(e) => {
+                    setDestinationEntity(e.target.value);
+                    if (fieldErrors.destination_entity) setFieldErrors((prev) => ({ ...prev, destination_entity: '' }));
+                  }}
                   options={[{ value: '', label: '-- Seleccione Entidad --' }, ...entities]}
-                  required
                 />
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">N° de Oficio / Documento</label>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    N° de Oficio / Documento (Opcional)
+                  </label>
                   <input
                     type="text"
                     value={documentNumber}
-                    onChange={(e) => setDocumentNumber(e.target.value)}
-                    className="w-full bg-slate-800 border-slate-700 rounded-md text-slate-200"
+                    onChange={(e) => {
+                      setDocumentNumber(e.target.value);
+                      if (fieldErrors.document_number) setFieldErrors((prev) => ({ ...prev, document_number: '' }));
+                    }}
+                    className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-all ${
+                      fieldErrors.document_number ? 'border-red-500 focus:border-red-500' : 'border-slate-700/80 focus:border-sky-500'
+                    }`}
                     placeholder="Ej. OFICIO-001-2026-DIRINCRI"
                   />
+                  {fieldErrors.document_number && (
+                    <p className="text-xs text-red-400 font-medium">{fieldErrors.document_number}</p>
+                  )}
                 </div>
               </>
             )}
 
             {selectedTransition.requires_evidence && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Evidencia Adjunta *</label>
-                <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center text-center">
-                  <UploadCloud className="w-8 h-8 text-slate-500 mb-2" />
-                  <p className="text-sm text-slate-400 mb-4">Haga clic o arrastre fotos aquí</p>
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Fotografía de Evidencia / Acta de Intervención *
+                </label>
+                <div className={`border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center text-center transition-colors ${
+                  fieldErrors.files ? 'border-red-500 bg-red-950/20' : 'border-slate-700 bg-slate-950/40 hover:border-slate-600'
+                }`}>
+                  <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
+                  <p className="text-xs text-slate-300 mb-3">Adjunte fotos o actas firmadas como sustento</p>
                   <input
                     type="file"
                     multiple
@@ -417,22 +446,24 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
                   />
                   <label
                     htmlFor="evidence-upload"
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-sm font-medium cursor-pointer transition-colors"
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold cursor-pointer transition-colors border border-slate-700"
                   >
                     Seleccionar Archivos
                   </label>
                 </div>
+                {fieldErrors.files && <p className="text-xs text-red-400 font-medium">{fieldErrors.files}</p>}
+
                 {files.length > 0 && (
-                  <div className="mt-3 space-y-2">
+                  <div className="space-y-1.5 pt-1">
                     {files.map((file, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-800 rounded-md text-sm">
+                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs">
                         <span className="text-slate-300 truncate mr-2">{file.name}</span>
                         <button
                           type="button"
                           onClick={() => removeFile(idx)}
-                          className="text-slate-500 hover:text-red-400"
+                          className="text-slate-500 hover:text-red-400 p-1"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
@@ -441,12 +472,12 @@ export const WorkflowActionPanel: React.FC<WorkflowActionPanelProps> = ({
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={submitting}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={submitting || (selectedTransition.requires_evidence && files.length === 0)}>
-                {submitting ? 'Procesando...' : 'Confirmar Acción'}
+              <Button type="submit" variant="primary" isLoading={submitting}>
+                Confirmar Transición
               </Button>
             </div>
           </form>

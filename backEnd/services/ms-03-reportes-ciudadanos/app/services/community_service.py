@@ -160,7 +160,9 @@ class CommunityService:
                 CommunityReportListItem(
                     id=r.id,
                     public_code=r.public_code,
-                    category_name=r.category.name,
+                    category_id=r.category.id if r.category else None,
+                    category_name=r.category.name if r.category else "Reporte Vecinal",
+                    category_slug=r.category.slug if r.category else None,
                     status=r.status,
                     priority=r.priority,
                     description=r.description,

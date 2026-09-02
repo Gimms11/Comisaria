@@ -45,14 +45,26 @@ export const SocialCard: React.FC<SocialCardProps> = ({
 
   const handleWhatsAppShare = async () => {
     CommunityReportsService.trackShare(report.public_code, 'whatsapp');
-    const url = `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+    const waUrl = `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+    const waWebUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.open(waWebUrl, '_blank');
+        } else {
+          await Linking.openURL(waWebUrl);
+        }
       } else {
-        // Web / browser fallback
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
+        const supported = await Linking.canOpenURL(waUrl);
+        if (supported) {
+          await Linking.openURL(waUrl);
+        } else {
+          await Linking.openURL(waWebUrl).catch(async () => {
+            await Clipboard.setStringAsync(shareText);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 3000);
+          });
+        }
       }
       onShared?.();
     } catch {

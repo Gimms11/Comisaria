@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Users, UserPlus, ShieldCheck, Mail, Lock, CheckCircle2, XCircle } from 'lucide-react';
+import { Users, UserPlus, ShieldCheck, Mail, Lock, Shield } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { Officer } from '../../types';
-import { Card, CardHeader, CardTitle } from '../ui/Card';
+import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { formatDateTime } from '../../lib/utils';
+import { officerCreateSchema, formatZodErrors } from '../../lib/validations';
 
 export const OfficersView: React.FC = () => {
   const { officer: currentOfficer } = useAuthStore();
@@ -19,6 +20,7 @@ export const OfficersView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     full_name: '',
@@ -45,11 +47,20 @@ export const OfficersView: React.FC = () => {
 
   const handleCreateOfficer = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormErrors({});
+
+    const result = officerCreateSchema.safeParse(form);
+    if (!result.success) {
+      setFormErrors(formatZodErrors(result.error));
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      await api.createOfficer(form);
+      await api.createOfficer(result.data);
       setIsModalOpen(false);
       setForm({ full_name: '', email: '', password: '', role: 'operador' });
+      setFormErrors({});
       fetchOfficers();
     } catch (err: any) {
       alert(err.message || 'Error al registrar oficial');
@@ -84,14 +95,18 @@ export const OfficersView: React.FC = () => {
           <Button
             variant="primary"
             size="sm"
-            onClick={() => setIsModalOpen(true)}
-            className="gap-2"
+            onClick={() => {
+              setFormErrors({});
+              setIsModalOpen(true);
+            }}
+            className="gap-2 whitespace-nowrap shrink-0"
           >
             <UserPlus className="w-4 h-4" /> Registrar Oficial
           </Button>
         ) : (
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-amber-400 font-mono flex items-center gap-2">
-            <span>🛡️ Modo Supervisión (Lectura)</span>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-amber-400 font-mono flex items-center gap-2 whitespace-nowrap shrink-0">
+            <Shield className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Modo Supervisión (Solo Lectura)</span>
           </div>
         )}
       </div>
@@ -102,12 +117,12 @@ export const OfficersView: React.FC = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-950/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
               <tr>
-                <th className="py-3.5 px-4">Oficial</th>
-                <th className="py-3.5 px-4">Correo Institucional</th>
-                <th className="py-3.5 px-4">Rol Asignado</th>
-                <th className="py-3.5 px-4">Estado Cuenta</th>
-                <th className="py-3.5 px-4">Fecha Registro</th>
-                <th className="py-3.5 px-4 text-right">Acciones</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Oficial</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Correo Institucional</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Rol Asignado</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Estado Cuenta</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Fecha Registro</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -126,12 +141,12 @@ export const OfficersView: React.FC = () => {
               ) : (
                 officers.map((o) => (
                   <tr key={o.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-sky-400" />
+                    <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2 whitespace-nowrap">
+                      <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
                       {o.full_name}
                     </td>
-                    <td className="py-3.5 px-4 text-slate-300 font-mono text-xs">{o.email}</td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 text-slate-300 font-mono text-xs whitespace-nowrap">{o.email}</td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <Badge
                         variant={
                           o.role === 'admin'
@@ -140,13 +155,14 @@ export const OfficersView: React.FC = () => {
                             ? 'warning'
                             : 'info'
                         }
+                        className="whitespace-nowrap shrink-0"
                       >
                         {o.role.toUpperCase()}
                       </Badge>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                        className={`text-xs px-2 py-0.5 rounded-full font-semibold border whitespace-nowrap shrink-0 ${
                           o.is_active
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                             : 'bg-red-500/10 text-red-400 border-red-500/30'
@@ -155,21 +171,21 @@ export const OfficersView: React.FC = () => {
                         {o.is_active ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-400 font-mono">
+                    <td className="py-3.5 px-4 text-xs text-slate-400 font-mono whitespace-nowrap">
                       {o.created_at ? formatDateTime(o.created_at) : 'Guardia'}
                     </td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       {isAdmin ? (
                         <Button
                           variant={o.is_active ? 'outline' : 'success'}
                           size="sm"
-                          className="text-xs"
+                          className="text-xs whitespace-nowrap"
                           onClick={() => handleToggleActive(o)}
                         >
                           {o.is_active ? 'Desactivar' : 'Activar'}
                         </Button>
                       ) : (
-                        <span className="text-xs text-slate-500 font-mono">Solo Admin</span>
+                        <span className="text-xs text-slate-500 font-mono whitespace-nowrap">Solo Admin</span>
                       )}
                     </td>
                   </tr>
@@ -183,44 +199,60 @@ export const OfficersView: React.FC = () => {
       {/* Register Officer Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setFormErrors({});
+        }}
         title="Registrar Nuevo Efectivo Policial"
         subtitle="Asigne credenciales y privilegios institucionales de acceso"
         maxWidth="md"
       >
-        <form onSubmit={handleCreateOfficer} className="space-y-4 text-left">
+        <form onSubmit={handleCreateOfficer} className="space-y-4 text-left" noValidate>
           <Input
             label="Grado y Nombre Completo"
-            required
             placeholder="Ej: Mayor PNP Carlos Mendoza"
             value={form.full_name}
-            onChange={(e) => setForm((prev) => ({ ...prev, full_name: e.target.value }))}
+            error={formErrors.full_name}
+            onChange={(e) => {
+              setForm((prev) => ({ ...prev, full_name: e.target.value }));
+              if (formErrors.full_name) setFormErrors((prev) => ({ ...prev, full_name: '' }));
+            }}
           />
 
           <Input
             label="Correo Electrónico Institucional"
             type="email"
-            required
             placeholder="carlos.mendoza@policia.gob.pe"
             value={form.email}
-            onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+            error={formErrors.email}
+            onChange={(e) => {
+              setForm((prev) => ({ ...prev, email: e.target.value }));
+              if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: '' }));
+            }}
             leftIcon={<Mail className="w-4 h-4 text-slate-400" />}
           />
 
           <Input
-            label="Contraseña de Acceso Temporal (Mínimo 8 caracteres)"
+            label="Contraseña de Acceso (Mínimo 8 car., Mayús., Minús. y Número)"
             type="password"
-            required
             placeholder="••••••••••••"
             value={form.password}
-            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+            error={formErrors.password}
+            onChange={(e) => {
+              setForm((prev) => ({ ...prev, password: e.target.value }));
+              if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
+            }}
             leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
           />
 
           <Select
             label="Nivel de Privilegio (Rol RBAC)"
             value={form.role}
-            onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
+            error={formErrors.role}
+            onChange={(e) => {
+              setForm((prev) => ({ ...prev, role: e.target.value }));
+              if (formErrors.role) setFormErrors((prev) => ({ ...prev, role: '' }));
+            }}
             options={[
               { value: 'operador', label: 'Operador (Revisión y Despacho)' },
               { value: 'comisario', label: 'Comisario (Supervisión y Estadísticas)' },

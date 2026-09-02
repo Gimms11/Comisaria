@@ -87,9 +87,10 @@ class ApiClient {
     return res.json();
   }
 
-  async getWsTicket(): Promise<{ ticket: string; expires_in_seconds: number }> {
+  async getWsTicket(signal?: AbortSignal): Promise<{ ticket: string; expires_in_seconds: number }> {
     const res = await this.fetchWithAuth(`${MS01_URL}/api/v1/auth/ws-ticket`, {
       method: 'POST',
+      signal,
     });
     if (!res.ok) throw new Error('Error al generar ticket WebSocket');
     return res.json();

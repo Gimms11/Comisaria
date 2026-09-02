@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ShieldAlert,
   Search,
@@ -36,7 +36,7 @@ import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { EvidenceViewerModal } from '../ui/EvidenceViewerModal';
 import { WorkflowActionPanel } from '../ui/WorkflowActionPanel';
-import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles } from '../../lib/utils';
+import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles, resolveMediaUrl } from '../../lib/utils';
 
 type SortField =
   | 'public_code'
@@ -101,9 +101,8 @@ export const CrimeReportsView: React.FC = () => {
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
   const [evidenceInitialIndex, setEvidenceInitialIndex] = useState(0);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     try {
-      setIsLoading(true);
       const res = await api.listCrimeReports({ limit: 200 });
       setReports(res?.items || []);
     } catch (e) {
@@ -111,20 +110,47 @@ export const CrimeReportsView: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const cats = await api.listCrimeCategories();
       setCategories(cats);
     } catch (e) {
       console.warn('Error al listar categorías:', e);
     }
+  }, []);
+
+  const handleManualRefresh = () => {
+    setIsLoading(true);
+    fetchReports();
   };
 
   useEffect(() => {
-    fetchCategories();
-    fetchReports();
+    let isMounted = true;
+
+    const loadInitialData = async () => {
+      try {
+        const [reportsRes, catsRes] = await Promise.all([
+          api.listCrimeReports({ limit: 200 }),
+          api.listCrimeCategories(),
+        ]);
+        if (isMounted) {
+          setReports(reportsRes?.items || []);
+          setCategories(catsRes || []);
+          setIsLoading(false);
+        }
+      } catch (e) {
+        console.warn('Error al cargar denuncias:', e);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadInitialData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Recarga reactiva en tiempo real al registrarse nuevo delito o cambiar estado
@@ -135,19 +161,29 @@ export const CrimeReportsView: React.FC = () => {
     ) {
       fetchReports();
     }
-  }, [latestAlert]);
+  }, [latestAlert, fetchReports]);
 
   // Load modal detail
   useEffect(() => {
     if (selectedCrimeReportId) {
+      let isMounted = true;
       setIsLoadingDetail(true);
       api
         .getCrimeReportDetail(selectedCrimeReportId)
         .then((data) => {
-          setDetail(data);
+          if (isMounted) {
+            setDetail(data);
+            setIsLoadingDetail(false);
+          }
         })
-        .catch((err) => console.error('Error al cargar detalle:', err))
-        .finally(() => setIsLoadingDetail(false));
+        .catch((err) => {
+          console.error('Error al cargar detalle:', err);
+          if (isMounted) setIsLoadingDetail(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
     } else {
       setDetail(null);
     }
@@ -175,10 +211,35 @@ export const CrimeReportsView: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Reset page to 1 whenever any filter or search query changes
-  useEffect(() => {
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, priorityFilter, categoryIdFilter, dateRangeFilter, isEmergencyOnly]);
+  };
+
+  const handleStatusFilterChange = (val: string) => {
+    setStatusFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handlePriorityFilterChange = (val: string) => {
+    setPriorityFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleCategoryFilterChange = (val: string) => {
+    setCategoryIdFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleDateRangeFilterChange = (val: string) => {
+    setDateRangeFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleEmergencyToggle = () => {
+    setIsEmergencyOnly((prev) => !prev);
+    setCurrentPage(1);
+  };
 
   const hasActiveFilters =
     Boolean(statusFilter) ||
@@ -365,7 +426,7 @@ export const CrimeReportsView: React.FC = () => {
               Limpiar Filtros
             </Button>
           )}
-          <Button variant="primary" size="sm" onClick={fetchReports} className="whitespace-nowrap">
+          <Button variant="primary" size="sm" onClick={handleManualRefresh} className="whitespace-nowrap">
             Refrescar Bandeja
           </Button>
         </div>
@@ -375,7 +436,7 @@ export const CrimeReportsView: React.FC = () => {
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         <button
           onClick={() => {
-            setStatusFilter('');
+            handleStatusFilterChange('');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -392,7 +453,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('pendiente');
+            handleStatusFilterChange('pendiente');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -410,7 +471,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('en_revision');
+            handleStatusFilterChange('en_revision');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -428,7 +489,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('en_atencion');
+            handleStatusFilterChange('en_atencion');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -446,7 +507,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('derivado');
+            handleStatusFilterChange('derivado');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -464,7 +525,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('resuelto');
+            handleStatusFilterChange('resuelto');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -482,7 +543,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('archivado');
+            handleStatusFilterChange('archivado');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -500,7 +561,7 @@ export const CrimeReportsView: React.FC = () => {
 
         <button
           onClick={() => {
-            setStatusFilter('rechazado');
+            handleStatusFilterChange('rechazado');
             setIsEmergencyOnly(false);
           }}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
@@ -517,7 +578,7 @@ export const CrimeReportsView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setIsEmergencyOnly((prev) => !prev)}
+          onClick={handleEmergencyToggle}
           className={`px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             isEmergencyOnly
               ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-400'
@@ -535,13 +596,13 @@ export const CrimeReportsView: React.FC = () => {
           <Input
             placeholder="Buscar por código (LT-2026-...) o texto..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             leftIcon={<Search className="w-4 h-4 text-slate-400" />}
           />
 
           <Select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => handleStatusFilterChange(e.target.value)}
             options={[
               { value: '', label: 'Todos los Estados' },
               { value: 'pendiente', label: 'Pendiente' },
@@ -556,7 +617,7 @@ export const CrimeReportsView: React.FC = () => {
 
           <Select
             value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
+            onChange={(e) => handlePriorityFilterChange(e.target.value)}
             options={[
               { value: '', label: 'Todas las Prioridades' },
               { value: 'urgente', label: 'Urgente' },
@@ -568,7 +629,7 @@ export const CrimeReportsView: React.FC = () => {
 
           <Select
             value={categoryIdFilter}
-            onChange={(e) => setCategoryIdFilter(e.target.value)}
+            onChange={(e) => handleCategoryFilterChange(e.target.value)}
             options={[
               { value: '', label: 'Todas las Categorías' },
               ...categories.map((c) => ({ value: c.id, label: c.name })),
@@ -577,7 +638,7 @@ export const CrimeReportsView: React.FC = () => {
 
           <Select
             value={dateRangeFilter}
-            onChange={(e) => setDateRangeFilter(e.target.value)}
+            onChange={(e) => handleDateRangeFilterChange(e.target.value)}
             options={[
               { value: 'all', label: 'Todas las Fechas' },
               { value: 'today', label: 'Hoy' },
@@ -864,7 +925,7 @@ export const CrimeReportsView: React.FC = () => {
                           className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center cursor-pointer hover:border-sky-500/60 transition-all shadow-md"
                         >
                           <img
-                            src={m.thumbnail_url || m.download_url}
+                            src={resolveMediaUrl(m.thumbnail_url || m.download_url)}
                             alt={`Evidencia delito ${idx + 1}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           />

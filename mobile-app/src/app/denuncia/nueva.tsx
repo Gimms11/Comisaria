@@ -22,6 +22,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { Category, ReportPriority } from '@/types';
 import { CrimeReportsService } from '@/services/crimeReportsService';
 import { StorageService } from '@/services/storageService';
+import {
+  CRIME_QUICK_PRESETS,
+  LA_TINGUINA_ZONES,
+  LOCATION_CONTEXT_TAGS,
+} from '@/constants/crimePresets';
 
 export default function NewCrimeReportScreen() {
   const theme = useTheme();
@@ -33,7 +38,7 @@ export default function NewCrimeReportScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<ReportPriority>('media');
+  const [priority, setPriority] = useState<ReportPriority>('alta');
   const [isEmergency, setIsEmergency] = useState(false);
 
   // Step 2: Location
@@ -56,28 +61,74 @@ export default function NewCrimeReportScreen() {
     });
   }, []);
 
+  // Quick tag toggle helper
+  const handleToggleTag = (tag: string) => {
+    setDescription((prev) => {
+      const parts = prev.split(' • ').map((p) => p.trim()).filter(Boolean);
+      const index = parts.findIndex((p) => p.toLowerCase() === tag.toLowerCase());
+      if (index >= 0) {
+        parts.splice(index, 1);
+        return parts.join(' • ');
+      } else {
+        parts.push(tag);
+        return parts.join(' • ');
+      }
+    });
+  };
+
+  const handleToggleZone = (zone: string) => {
+    setLocationAddress((prev) => {
+      if (prev.trim().toLowerCase() === zone.trim().toLowerCase()) {
+        return '';
+      }
+      return zone;
+    });
+  };
+
+  const handleToggleLocationContext = (ctx: string) => {
+    setLocationNote((prev) => {
+      const parts = prev.split(', ').map((p) => p.trim()).filter(Boolean);
+      const index = parts.findIndex((p) => p.toLowerCase() === ctx.toLowerCase());
+      if (index >= 0) {
+        parts.splice(index, 1);
+        return parts.join(', ');
+      } else {
+        parts.push(ctx);
+        return parts.join(', ');
+      }
+    });
+  };
+
+  const handleGeneratePin = () => {
+    const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
+    setPin(randomPin);
+    setConfirmPin(randomPin);
+  };
+
   const handleGetLocation = async () => {
     setGpsLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          'Permiso no concedido',
-          'Puedes escribir la dirección o referencia manualmente.'
+          'Permiso GPS no disponible',
+          'Selecciona una de las zonas frecuentes de La Tinguiña con 1 toque.'
         );
         setGpsLoading(false);
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({});
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
       setCoords({
         lat: loc.coords.latitude,
         lng: loc.coords.longitude,
       });
       if (!locationAddress) {
-        setLocationAddress(`Ubicación GPS: ${loc.coords.latitude.toFixed(5)}, ${loc.coords.longitude.toFixed(5)}`);
+        setLocationAddress(`GPS: ${loc.coords.latitude.toFixed(5)}, ${loc.coords.longitude.toFixed(5)} (La Tinguiña)`);
       }
     } catch {
-      Alert.alert('Aviso', 'No se pudo obtener el GPS. Ingrese la referencia manualmente.');
+      Alert.alert('Aviso GPS', 'Puedes tocar una de las zonas de La Tinguiña para fijar el lugar.');
     } finally {
       setGpsLoading(false);
     }
@@ -89,7 +140,7 @@ export default function NewCrimeReportScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.8,
-        exif: false, // Clean EXIF locally
+        exif: false,
       });
 
       if (!result.canceled && result.assets.length > 0) {
@@ -123,17 +174,20 @@ export default function NewCrimeReportScreen() {
 
   const handleSubmit = async () => {
     if (!selectedCategory) {
-      Alert.alert('Campo requerido', 'Por favor selecciona una categoría.');
+      Alert.alert('Campo requerido', 'Por favor selecciona un tipo de delito.');
       setStep(1);
       return;
     }
-    if (!description.trim() || description.trim().length < 10) {
-      Alert.alert('Descripción requerida', 'Describe brevemente lo ocurrido (mínimo 10 caracteres).');
+    if (!description.trim() || description.trim().length < 8) {
+      Alert.alert(
+        'Descripción requerida',
+        'Toca los botones de situación rápida para describir lo que ocurre en segundos.'
+      );
       setStep(1);
       return;
     }
     if (pin && pin.length !== 6) {
-      Alert.alert('PIN inválido', 'El PIN de seguimiento debe contener exactamente 6 dígitos numéricos.');
+      Alert.alert('PIN inválido', 'El PIN debe tener 6 dígitos numéricos o déjalo vacío para enviar anónimamente.');
       return;
     }
     if (pin && pin !== confirmPin) {
@@ -144,40 +198,49 @@ export default function NewCrimeReportScreen() {
     setLoading(true);
 
     try {
-      // 1. Send report
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('[DenunciaNueva] 🚀 Enviando denuncia anónima a MS-02...');
+      console.log('[DenunciaNueva] Categoría:', selectedCategory.name, `(${selectedCategory.id})`);
+      console.log('[DenunciaNueva] Urgencia:', isEmergency ? 'urgente' : priority);
+      console.log('[DenunciaNueva] Dirección:', locationAddress.trim() || 'Sector urbano La Tinguiña, Ica');
+      console.log('[DenunciaNueva] Evidencia fotográfica:', evidenceUri ? evidenceUri : 'Ninguna');
+
       const response = await CrimeReportsService.createReport({
         category_id: selectedCategory.id,
         description: description.trim(),
-        priority,
+        priority: isEmergency ? 'urgente' : priority,
         is_emergency: isEmergency,
         latitude: coords?.lat || null,
         longitude: coords?.lng || null,
-        address_reference: locationAddress.trim() || 'Distrito La Tinguiña',
+        address_reference: locationAddress.trim() || 'Sector urbano La Tinguiña, Ica',
         location_note: locationNote.trim() || undefined,
         followup_code: pin.trim() || undefined,
       });
 
-      // 2. Upload photo if selected
+      console.log('[DenunciaNueva] ✅ Denuncia creada exitosamente con código:', response.public_code);
+
       if (evidenceUri) {
+        console.log('[DenunciaNueva] 📸 Subiendo foto de evidencia para código:', response.public_code);
         try {
-          await CrimeReportsService.uploadEvidence(response.public_code, evidenceUri);
-        } catch (e) {
-          console.warn('Media upload warning:', e);
+          const uploadRes = await CrimeReportsService.uploadEvidence(response.public_code, evidenceUri);
+          console.log('[DenunciaNueva] ✅ Evidencia fotográfica adjuntada con éxito:', uploadRes);
+        } catch (e: any) {
+          console.error('[DenunciaNueva] ❌ Error al subir evidencia fotográfica:', e?.message || e);
         }
+      } else {
+        console.log('[DenunciaNueva] ℹ️ Denuncia enviada sin foto adjunta.');
       }
 
-      // 3. Save receipt locally
       await StorageService.saveReportReceipt({
         public_code: response.public_code,
         type: 'denuncia_anonima',
         category_name: selectedCategory.name,
         created_at: response.created_at,
         followup_code: pin.trim() || undefined,
-        address_reference: locationAddress.trim(),
+        address_reference: locationAddress.trim() || 'La Tinguiña',
         description_summary: description.trim().slice(0, 80),
       });
 
-      // 4. Navigate to success
       router.replace({
         pathname: '/denuncia/exito',
         params: {
@@ -197,49 +260,94 @@ export default function NewCrimeReportScreen() {
     }
   };
 
+  // Quick preset groups for the currently selected category
+  const activePresets = selectedCategory
+    ? CRIME_QUICK_PRESETS[selectedCategory.id] || CRIME_QUICK_PRESETS.default
+    : CRIME_QUICK_PRESETS.default;
+
+  const isStep1Valid = description.trim().length >= 8;
+  const isStep2Valid = locationAddress.trim().length > 0 || coords !== null;
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <AppHeader
-        title="Nueva Denuncia Anónima"
-        subtitle="Confidencial y Segura (3 Pasos)"
-        showBack
-      />
+      {/* Safe stealth header */}
+      <View style={[styles.headerWrap, { backgroundColor: theme.card, borderBottomColor: theme.cardBorder }]}>
+        <AppHeader
+          title="Denuncia Anónima"
+          subtitle="100% Protegido • Zero Datos"
+          showBack
+        />
+        {/* Stealth Quick Exit Button */}
+        <Pressable
+          onPress={() => router.replace('/(tabs)' as any)}
+          style={({ pressed }) => [
+            styles.stealthExitBtn,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Feather name="eye-off" size={14} color="#64748B" />
+          <Text style={styles.stealthExitText}>Disimular / Salir</Text>
+        </Pressable>
+      </View>
 
-      {/* Progress step bar */}
+      {/* Modern Progress Bar */}
       <View style={[styles.stepBar, { backgroundColor: theme.card, borderBottomColor: theme.cardBorder }]}>
-        <View style={styles.stepItem}>
-          <View style={[styles.stepDot, step >= 1 ? { backgroundColor: '#DC2626' } : { backgroundColor: theme.cardBorder }]}>
-            <Text style={styles.stepNum}>1</Text>
+        <Pressable onPress={() => setStep(1)} style={styles.stepItem}>
+          <View
+            style={[
+              styles.stepDot,
+              step >= 1 ? { backgroundColor: '#DC2626' } : { backgroundColor: theme.cardBorder },
+            ]}
+          >
+            {step > 1 ? (
+              <Feather name="check" size={12} color="#FFFFFF" />
+            ) : (
+              <Text style={styles.stepNum}>1</Text>
+            )}
           </View>
-          <Text style={[styles.stepLabel, { color: step === 1 ? theme.text : theme.textSecondary }]}>
-            ¿Qué pasó?
+          <Text style={[styles.stepLabel, { color: step === 1 ? '#DC2626' : theme.textSecondary }]}>
+            1. ¿Qué pasa?
           </Text>
-        </View>
+        </Pressable>
 
         <View style={[styles.stepLine, { backgroundColor: step >= 2 ? '#DC2626' : theme.cardBorder }]} />
 
-        <View style={styles.stepItem}>
-          <View style={[styles.stepDot, step >= 2 ? { backgroundColor: '#DC2626' } : { backgroundColor: theme.cardBorder }]}>
-            <Text style={styles.stepNum}>2</Text>
+        <Pressable onPress={() => isStep1Valid && setStep(2)} style={styles.stepItem}>
+          <View
+            style={[
+              styles.stepDot,
+              step >= 2 ? { backgroundColor: '#DC2626' } : { backgroundColor: theme.cardBorder },
+            ]}
+          >
+            {step > 2 ? (
+              <Feather name="check" size={12} color="#FFFFFF" />
+            ) : (
+              <Text style={styles.stepNum}>2</Text>
+            )}
           </View>
-          <Text style={[styles.stepLabel, { color: step === 2 ? theme.text : theme.textSecondary }]}>
-            ¿Dónde pasó?
+          <Text style={[styles.stepLabel, { color: step === 2 ? '#DC2626' : theme.textSecondary }]}>
+            2. ¿Dónde?
           </Text>
-        </View>
+        </Pressable>
 
         <View style={[styles.stepLine, { backgroundColor: step >= 3 ? '#DC2626' : theme.cardBorder }]} />
 
-        <View style={styles.stepItem}>
-          <View style={[styles.stepDot, step >= 3 ? { backgroundColor: '#DC2626' } : { backgroundColor: theme.cardBorder }]}>
+        <Pressable onPress={() => isStep1Valid && isStep2Valid && setStep(3)} style={styles.stepItem}>
+          <View
+            style={[
+              styles.stepDot,
+              step >= 3 ? { backgroundColor: '#DC2626' } : { backgroundColor: theme.cardBorder },
+            ]}
+          >
             <Text style={styles.stepNum}>3</Text>
           </View>
-          <Text style={[styles.stepLabel, { color: step === 3 ? theme.text : theme.textSecondary }]}>
-            Evidencia & PIN
+          <Text style={[styles.stepLabel, { color: step === 3 ? '#DC2626' : theme.textSecondary }]}>
+            3. Enviar
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -247,18 +355,25 @@ export default function NewCrimeReportScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ================= STEP 1: QUÉ PASÓ ================= */}
+        {/* ================= STEP 1: QUÉ PASÓ (ZERO TYPING) ================= */}
         {step === 1 && (
           <View style={styles.stepContainer}>
-            <View style={[styles.privacyBox, { backgroundColor: theme.primaryLight }]}>
-              <Feather name="lock" size={16} color={theme.primaryDark} />
-              <Text style={[styles.privacyText, { color: theme.primaryDark }]}>
-                No solicitamos DNI, nombres ni guardamos tu dirección IP.
-              </Text>
+            {/* Zero trace assurance banner */}
+            <View style={[styles.securityBanner, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
+              <View style={styles.secShieldIcon}>
+                <Feather name="shield" size={16} color="#DC2626" />
+              </View>
+              <View style={styles.secTextWrap}>
+                <Text style={styles.secBannerTitle}>PROTECCIÓN TOTAL CONTRA REPRESALIAS</Text>
+                <Text style={styles.secBannerSubtitle}>
+                  No te pedimos DNI, nombres ni guardamos tu número. Solo los hechos.
+                </Text>
+              </View>
             </View>
 
-            <Text style={[styles.inputLabel, { color: theme.text }]}>
-              1. Selecciona el tipo de delito:
+            {/* Category selection */}
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              1. Selecciona el delito:
             </Text>
 
             <View style={styles.categoryGrid}>
@@ -268,181 +383,367 @@ export default function NewCrimeReportScreen() {
                   <Pressable
                     key={cat.id}
                     onPress={() => setSelectedCategory(cat)}
-                    style={[
+                    style={({ pressed }) => [
                       styles.categoryCard,
                       {
-                        backgroundColor: isSelected ? theme.primaryLight : theme.card,
-                        borderColor: isSelected ? theme.primary : theme.cardBorder,
+                        backgroundColor: isSelected ? '#FEF2F2' : theme.card,
+                        borderColor: isSelected ? '#DC2626' : theme.cardBorder,
+                        opacity: pressed ? 0.9 : 1,
                       },
                     ]}
                   >
-                    <Feather
-                      name="alert-triangle"
-                      size={20}
-                      color={isSelected ? theme.primary : theme.textSecondary}
-                    />
+                    <View
+                      style={[
+                        styles.catIconCircle,
+                        { backgroundColor: isSelected ? '#DC2626' : theme.backgroundElement },
+                      ]}
+                    >
+                      <Feather
+                        name={isSelected ? 'alert-triangle' : 'shield'}
+                        size={16}
+                        color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                      />
+                    </View>
                     <Text
                       style={[
                         styles.categoryName,
-                        { color: isSelected ? theme.primaryDark : theme.text },
+                        { color: isSelected ? '#991B1B' : theme.text },
                       ]}
                     >
                       {cat.name}
                     </Text>
+                    {isSelected && (
+                      <View style={styles.selectedCheck}>
+                        <Feather name="check" size={12} color="#DC2626" />
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text style={[styles.inputLabel, { color: theme.text, marginTop: Spacing.two }]}>
-              2. Describe lo ocurrido con el mayor detalle posible:
-            </Text>
+            {/* QUICK 1-TAP DESCRIPTORS (ZERO TYPING CORE) */}
+            <View style={[styles.quickTagsSection, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+              <View style={styles.quickTagsHeader}>
+                <View style={styles.quickTagsTitleRow}>
+                  <Feather name="zap" size={16} color="#D97706" />
+                  <Text style={[styles.quickTagsTitle, { color: theme.text }]}>
+                    Toque rápido para describir (sin escribir):
+                  </Text>
+                </View>
+                {description.length > 0 && (
+                  <Pressable onPress={() => setDescription('')}>
+                    <Text style={styles.clearText}>Limpiar</Text>
+                  </Pressable>
+                )}
+              </View>
 
-            <View
-              style={[
-                styles.textAreaWrapper,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-              ]}
-            >
-              <TextInput
-                style={[styles.textArea, { color: theme.text }]}
-                placeholder="Indica qué pasó, vestimenta, vehículos, rasgos físicos o detalles relevantes..."
-                placeholderTextColor={theme.textMuted}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={5}
-                textAlignVertical="top"
-              />
+              {activePresets.map((group, gIdx) => (
+                <View key={gIdx} style={styles.tagGroup}>
+                  <Text style={[styles.tagGroupLabel, { color: theme.textSecondary }]}>
+                    {group.label}
+                  </Text>
+                  <View style={styles.chipsWrap}>
+                    {group.tags.map((tag, tIdx) => {
+                      const isAdded = description
+                        .split(' • ')
+                        .map((p) => p.trim().toLowerCase())
+                        .includes(tag.trim().toLowerCase());
+                      return (
+                        <Pressable
+                          key={tIdx}
+                          onPress={() => handleToggleTag(tag)}
+                          style={({ pressed }) => [
+                            styles.presetChip,
+                            {
+                              backgroundColor: isAdded ? '#DC2626' : theme.backgroundElement,
+                              borderColor: isAdded ? '#DC2626' : theme.cardBorder,
+                              opacity: pressed ? 0.8 : 1,
+                            },
+                          ]}
+                        >
+                          <Feather
+                            name={isAdded ? 'check' : 'plus'}
+                            size={12}
+                            color={isAdded ? '#FFFFFF' : theme.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.presetChipText,
+                              { color: isAdded ? '#FFFFFF' : theme.text },
+                            ]}
+                          >
+                            {tag}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
             </View>
 
-            {/* Urgency Switch */}
+            {/* Description Text Box */}
+            <View style={styles.descBlock}>
+              <View style={styles.descLabelRow}>
+                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>
+                  Detalle del hecho:
+                </Text>
+                <Text
+                  style={[
+                    styles.counterText,
+                    { color: isStep1Valid ? '#16A34A' : theme.textSecondary },
+                  ]}
+                >
+                  {isStep1Valid ? '✓ Listo' : 'Mínimo 8 letras'}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.textAreaWrapper,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: isStep1Valid ? '#DC2626' : theme.cardBorder,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[styles.textArea, { color: theme.text }]}
+                  placeholder="Toca los botones arriba o escribe aquí detalles adicionales..."
+                  placeholderTextColor={theme.textMuted}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            {/* Urgency Alert Switch */}
             <Pressable
               onPress={() => setIsEmergency(!isEmergency)}
-              style={[
+              style={({ pressed }) => [
                 styles.urgencyToggle,
                 {
                   backgroundColor: isEmergency ? '#FEE2E2' : theme.card,
                   borderColor: isEmergency ? '#DC2626' : theme.cardBorder,
+                  opacity: pressed ? 0.9 : 1,
                 },
               ]}
             >
-              <Feather
-                name={isEmergency ? 'alert-triangle' : 'shield'}
-                size={20}
-                color={isEmergency ? '#DC2626' : theme.textSecondary}
-              />
+              <View
+                style={[
+                  styles.urgencyIconBox,
+                  { backgroundColor: isEmergency ? '#DC2626' : theme.backgroundElement },
+                ]}
+              >
+                <Feather
+                  name="bell"
+                  size={18}
+                  color={isEmergency ? '#FFFFFF' : theme.textSecondary}
+                />
+              </View>
               <View style={styles.urgencyTextWrap}>
                 <Text style={[styles.urgencyTitle, { color: isEmergency ? '#DC2626' : theme.text }]}>
-                  {isEmergency ? '¡Situación de Alta Urgencia Activada!' : 'Marcar como Hecho Urgente'}
+                  {isEmergency ? '¡Alerta de Máxima Urgencia Activada!' : 'Marcar como Hecho en Curso / Urgente'}
                 </Text>
                 <Text style={[styles.urgencyDesc, { color: theme.textSecondary }]}>
-                  Activa alerta prioritaria en la central de radio patrulla.
+                  Envía prioridad roja directa a los patrulleros de turno.
                 </Text>
               </View>
+              <Feather
+                name={isEmergency ? 'check-circle' : 'circle'}
+                size={22}
+                color={isEmergency ? '#DC2626' : theme.cardBorder}
+              />
             </Pressable>
 
+            {/* Next Step Button */}
             <Pressable
               onPress={() => {
-                if (!description.trim() || description.trim().length < 10) {
-                  Alert.alert('Información incompleta', 'Por favor describe brevemente el hecho (mínimo 10 caracteres).');
+                if (!isStep1Valid) {
+                  Alert.alert(
+                    'Información requerida',
+                    'Toca cualquiera de los botones de situación arriba para autocompletar la descripción.'
+                  );
                   return;
                 }
                 setStep(2);
               }}
               style={({ pressed }) => [
-                styles.nextButton,
-                { backgroundColor: '#DC2626', opacity: pressed ? 0.85 : 1 },
+                styles.primaryNextBtn,
+                {
+                  backgroundColor: isStep1Valid ? '#DC2626' : '#94A3B8',
+                  opacity: pressed ? 0.85 : 1,
+                },
               ]}
             >
-              <Text style={styles.nextButtonText}>Continuar al Paso 2</Text>
+              <Text style={styles.primaryNextBtnText}>Siguiente: Fijar Ubicación</Text>
               <Feather name="arrow-right" size={18} color="#FFFFFF" />
             </Pressable>
           </View>
         )}
 
-        {/* ================= STEP 2: DÓNDE PASÓ ================= */}
+        {/* ================= STEP 2: DÓNDE PASÓ (1-TAP LOCATIONS) ================= */}
         {step === 2 && (
           <View style={styles.stepContainer}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>
-              Dirección o Referencia del Lugar del Hecho:
-            </Text>
-
-            <View
-              style={[
-                styles.inputWrapper,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-              ]}
-            >
-              <Feather name="map-pin" size={18} color={theme.textSecondary} />
-              <TextInput
-                style={[styles.textInput, { color: theme.text }]}
-                placeholder="Ej. Av. Principal frente a la losa deportiva La Tinguiña"
-                placeholderTextColor={theme.textMuted}
-                value={locationAddress}
-                onChangeText={setLocationAddress}
-              />
-            </View>
-
-            {/* GPS Button */}
+            {/* Instant 1-Tap GPS Button */}
             <Pressable
               onPress={handleGetLocation}
               disabled={gpsLoading}
               style={({ pressed }) => [
-                styles.gpsButton,
+                styles.giantGpsBtn,
                 {
-                  backgroundColor: theme.backgroundElement,
-                  borderColor: theme.cardBorder,
-                  opacity: pressed || gpsLoading ? 0.7 : 1,
+                  backgroundColor: coords ? '#DCFCE7' : '#047857',
+                  borderColor: coords ? '#16A34A' : '#064E3B',
+                  opacity: pressed || gpsLoading ? 0.85 : 1,
                 },
               ]}
             >
               {gpsLoading ? (
-                <ActivityIndicator size="small" color={theme.primary} />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Feather name="navigation" size={16} color={theme.primary} />
+                <Feather
+                  name={coords ? 'check-circle' : 'navigation'}
+                  size={22}
+                  color={coords ? '#16A34A' : '#FFFFFF'}
+                />
               )}
-              <Text style={[styles.gpsButtonText, { color: theme.primary }]}>
-                {coords ? '✓ Coordenadas GPS fijadas' : 'Usar mi ubicación GPS actual'}
-              </Text>
+              <View style={styles.giantGpsTextWrap}>
+                <Text style={[styles.giantGpsTitle, { color: coords ? '#15803D' : '#FFFFFF' }]}>
+                  {coords ? '✓ Mi Ubicación GPS Fijada con Éxito' : 'Usar Mi Ubicación GPS Actual (1 Toque)'}
+                </Text>
+                <Text style={[styles.giantGpsSub, { color: coords ? '#166534' : 'rgba(255,255,255,0.85)' }]}>
+                  {coords
+                    ? `Lat: ${coords.lat.toFixed(5)}, Lng: ${coords.lng.toFixed(5)}`
+                    : 'Fija el punto exacto por satélite sin escribir'}
+                </Text>
+              </View>
             </Pressable>
 
-            <Text style={[styles.inputLabel, { color: theme.text, marginTop: Spacing.two }]}>
-              Puntos de Referencia Adicionales (Opcional):
-            </Text>
+            {/* Quick reference zones in La Tinguiña */}
+            <View style={[styles.quickTagsSection, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+              <View style={styles.quickTagsHeader}>
+                <View style={styles.quickTagsTitleRow}>
+                  <Feather name="map-pin" size={16} color="#0284C7" />
+                  <Text style={[styles.quickTagsTitle, { color: theme.text }]}>
+                    Zonas frecuentes en La Tinguiña (1 toque):
+                  </Text>
+                </View>
+              </View>
 
-            <View
-              style={[
-                styles.textAreaWrapper,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-              ]}
-            >
-              <TextInput
-                style={[styles.textArea, { color: theme.text }]}
-                placeholder="Ej. Casa de fachada verde, esquina sin alumbrado, frente a la farmacia..."
-                placeholderTextColor={theme.textMuted}
-                value={locationNote}
-                onChangeText={setLocationNote}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
+              <View style={styles.chipsWrap}>
+                {LA_TINGUINA_ZONES.map((zone, zIdx) => {
+                  const isSelected = locationAddress.trim().toLowerCase() === zone.trim().toLowerCase();
+                  return (
+                    <Pressable
+                      key={zIdx}
+                      onPress={() => handleToggleZone(zone)}
+                      style={({ pressed }) => [
+                        styles.zoneChip,
+                        {
+                          backgroundColor: isSelected ? '#0284C7' : theme.backgroundElement,
+                          borderColor: isSelected ? '#0284C7' : theme.cardBorder,
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      <Feather
+                        name={isSelected ? 'check' : 'map-pin'}
+                        size={12}
+                        color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.zoneChipText,
+                          { color: isSelected ? '#FFFFFF' : theme.text },
+                        ]}
+                      >
+                        {zone}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
 
+            {/* Address Input Field */}
+            <View style={styles.descBlock}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                Dirección / Referencia fijada:
+              </Text>
+
+              <View
+                style={[
+                  styles.inputWrapper,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: isStep2Valid ? '#0284C7' : theme.cardBorder,
+                  },
+                ]}
+              >
+                <Feather name="map-pin" size={18} color="#0284C7" />
+                <TextInput
+                  style={[styles.textInput, { color: theme.text }]}
+                  placeholder="Toca una zona arriba o escribe la calle..."
+                  placeholderTextColor={theme.textMuted}
+                  value={locationAddress}
+                  onChangeText={setLocationAddress}
+                />
+              </View>
+            </View>
+
+            {/* Quick Context tags */}
+            <View style={[styles.quickTagsSection, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+              <Text style={[styles.tagGroupLabel, { color: theme.textSecondary }]}>
+                Detalle del entorno (Opcional):
+              </Text>
+              <View style={styles.chipsWrap}>
+                {LOCATION_CONTEXT_TAGS.map((ctx, cIdx) => {
+                  const isAdded = locationNote
+                    .split(', ')
+                    .map((p) => p.trim().toLowerCase())
+                    .includes(ctx.trim().toLowerCase());
+                  return (
+                    <Pressable
+                      key={cIdx}
+                      onPress={() => handleToggleLocationContext(ctx)}
+                      style={({ pressed }) => [
+                        styles.presetChip,
+                        {
+                          backgroundColor: isAdded ? '#0284C7' : theme.backgroundElement,
+                          borderColor: isAdded ? '#0284C7' : theme.cardBorder,
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      <Feather
+                        name={isAdded ? 'check' : 'plus'}
+                        size={12}
+                        color={isAdded ? '#FFFFFF' : theme.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          { color: isAdded ? '#FFFFFF' : theme.text },
+                        ]}
+                      >
+                        {ctx}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Step 2 Actions */}
             <View style={styles.buttonsRow}>
               <Pressable
                 onPress={() => setStep(1)}
                 style={({ pressed }) => [
-                  styles.prevButton,
+                  styles.prevBtn,
                   {
                     backgroundColor: theme.backgroundElement,
                     borderColor: theme.cardBorder,
@@ -451,28 +752,85 @@ export default function NewCrimeReportScreen() {
                 ]}
               >
                 <Feather name="arrow-left" size={18} color={theme.text} />
-                <Text style={[styles.prevButtonText, { color: theme.text }]}>Atrás</Text>
+                <Text style={[styles.prevBtnText, { color: theme.text }]}>Atrás</Text>
               </Pressable>
 
               <Pressable
-                onPress={() => setStep(3)}
+                onPress={() => {
+                  if (!isStep2Valid) {
+                    Alert.alert(
+                      'Ubicación requerida',
+                      'Toca el botón de GPS o selecciona una de las zonas de La Tinguiña.'
+                    );
+                    return;
+                  }
+                  setStep(3);
+                }}
                 style={({ pressed }) => [
-                  styles.nextButtonHalf,
-                  { backgroundColor: '#DC2626', opacity: pressed ? 0.85 : 1 },
+                  styles.nextBtnHalf,
+                  {
+                    backgroundColor: isStep2Valid ? '#DC2626' : '#94A3B8',
+                    opacity: pressed ? 0.85 : 1,
+                  },
                 ]}
               >
-                <Text style={styles.nextButtonText}>Continuar al Paso 3</Text>
+                <Text style={styles.nextBtnText}>Siguiente: Evidencia y PIN</Text>
                 <Feather name="arrow-right" size={18} color="#FFFFFF" />
               </Pressable>
             </View>
           </View>
         )}
 
-        {/* ================= STEP 3: EVIDENCIA & PIN ================= */}
+        {/* ================= STEP 3: EVIDENCIA & ENVÍO EXPRESS ================= */}
         {step === 3 && (
           <View style={styles.stepContainer}>
-            <Text style={[styles.inputLabel, { color: theme.text }]}>
-              Adjuntar Foto de Evidencia (Opcional):
+            {/* Live Summary Card */}
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: '#DC2626',
+                },
+              ]}
+            >
+              <View style={styles.summaryHeader}>
+                <View style={styles.summaryBadge}>
+                  <Feather name="shield" size={12} color="#DC2626" />
+                  <Text style={styles.summaryBadgeText}>RESUMEN DE DENUNCIA</Text>
+                </View>
+                {isEmergency && (
+                  <View style={[styles.summaryBadge, { backgroundColor: '#DC2626' }]}>
+                    <Text style={[styles.summaryBadgeText, { color: '#FFFFFF' }]}>ALERTA ROJA</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Delito:</Text>
+                <Text style={[styles.summaryVal, { color: theme.text }]}>
+                  {selectedCategory?.name || 'Delito reportado'}
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Lugar:</Text>
+                <Text style={[styles.summaryVal, { color: theme.text }]}>
+                  {locationAddress || 'La Tinguiña'}
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Hechos:</Text>
+                <Text style={[styles.summaryVal, { color: theme.text }]} numberOfLines={2}>
+                  {description}
+                </Text>
+              </View>
+            </View>
+
+            {/* Photo Attachment (Optional) */}
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              Foto o captura de prueba (Opcional):
             </Text>
 
             <View style={styles.mediaButtonsRow}>
@@ -487,7 +845,7 @@ export default function NewCrimeReportScreen() {
                   },
                 ]}
               >
-                <Feather name="camera" size={22} color={theme.primary} />
+                <Feather name="camera" size={20} color="#DC2626" />
                 <Text style={[styles.mediaOptionText, { color: theme.text }]}>Tomar Foto</Text>
               </Pressable>
 
@@ -502,12 +860,11 @@ export default function NewCrimeReportScreen() {
                   },
                 ]}
               >
-                <Feather name="image" size={22} color={theme.accent} />
+                <Feather name="image" size={20} color="#0284C7" />
                 <Text style={[styles.mediaOptionText, { color: theme.text }]}>Galería</Text>
               </Pressable>
             </View>
 
-            {/* Evidence preview */}
             {evidenceUri && (
               <View style={styles.evidencePreviewContainer}>
                 <Image
@@ -528,16 +885,29 @@ export default function NewCrimeReportScreen() {
               </View>
             )}
 
-            {/* PIN Section */}
+            {/* Secret PIN with 1-Tap Generator */}
             <View style={[styles.pinCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-              <View style={styles.pinCardHeader}>
-                <Feather name="key" size={18} color={theme.primary} />
-                <Text style={[styles.pinCardTitle, { color: theme.text }]}>
-                  Clave Secreta de Seguimiento (Opcional)
-                </Text>
+              <View style={styles.pinHeaderRow}>
+                <View style={styles.pinIconTitle}>
+                  <Feather name="key" size={16} color="#047857" />
+                  <Text style={[styles.pinCardTitle, { color: theme.text }]}>
+                    Clave PIN de 6 dígitos (Opcional)
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={handleGeneratePin}
+                  style={({ pressed }) => [
+                    styles.genPinBtn,
+                    { opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Feather name="refresh-cw" size={12} color="#047857" />
+                  <Text style={styles.genPinBtnText}>Auto-Generar</Text>
+                </Pressable>
               </View>
+
               <Text style={[styles.pinCardDesc, { color: theme.textSecondary }]}>
-                Crea un PIN numérico de 6 dígitos si deseas desbloquear la descripción completa y notas internas al consultar el estado de tu denuncia.
+                Permite ver detalles confidenciales al consultar el estado. Puedes omitirlo para enviar más rápido.
               </Text>
 
               <View style={styles.pinInputsRow}>
@@ -591,7 +961,7 @@ export default function NewCrimeReportScreen() {
                 onPress={() => setStep(2)}
                 disabled={loading}
                 style={({ pressed }) => [
-                  styles.prevButton,
+                  styles.prevBtn,
                   {
                     backgroundColor: theme.backgroundElement,
                     borderColor: theme.cardBorder,
@@ -600,7 +970,7 @@ export default function NewCrimeReportScreen() {
                 ]}
               >
                 <Feather name="arrow-left" size={18} color={theme.text} />
-                <Text style={[styles.prevButtonText, { color: theme.text }]}>Atrás</Text>
+                <Text style={[styles.prevBtnText, { color: theme.text }]}>Atrás</Text>
               </Pressable>
 
               <Pressable
@@ -610,7 +980,7 @@ export default function NewCrimeReportScreen() {
                   styles.submitFinalBtn,
                   {
                     backgroundColor: '#DC2626',
-                    opacity: pressed || loading ? 0.8 : 1,
+                    opacity: pressed || loading ? 0.85 : 1,
                   },
                 ]}
               >
@@ -618,8 +988,8 @@ export default function NewCrimeReportScreen() {
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Feather name="shield" size={18} color="#FFFFFF" />
-                    <Text style={styles.submitFinalBtnText}>Enviar Denuncia</Text>
+                    <Feather name="shield" size={20} color="#FFFFFF" />
+                    <Text style={styles.submitFinalBtnText}>ENVIAR DENUNCIA AHORA</Text>
                   </>
                 )}
               </Pressable>
@@ -635,12 +1005,34 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  headerWrap: {
+    borderBottomWidth: 1,
+    position: 'relative',
+  },
+  stealthExitBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 14 : 18,
+    right: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(100, 116, 139, 0.1)',
+    paddingHorizontal: Spacing.two + 2,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    zIndex: 20,
+  },
+  stealthExitText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '700',
+  },
   stepBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
+    paddingVertical: Spacing.two + 2,
     borderBottomWidth: 1,
   },
   stepItem: {
@@ -661,13 +1053,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   stepLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   stepLine: {
     flex: 1,
     height: 2,
-    marginHorizontal: 6,
+    marginHorizontal: 4,
   },
   scrollContent: {
     padding: Spacing.four,
@@ -676,21 +1068,41 @@ const styles = StyleSheet.create({
   stepContainer: {
     gap: Spacing.three,
   },
-  privacyBox: {
+  securityBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
     padding: Spacing.three,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
   },
-  privacyText: {
-    fontSize: 12,
-    fontWeight: '600',
+  secShieldIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.full,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secTextWrap: {
     flex: 1,
   },
-  inputLabel: {
+  secBannerTitle: {
+    color: '#991B1B',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  secBannerSubtitle: {
+    color: '#B91C1C',
+    fontSize: 11,
+    marginTop: 1,
+    lineHeight: 15,
+  },
+  sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -701,33 +1113,131 @@ const styles = StyleSheet.create({
     width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    padding: Spacing.three,
+    padding: Spacing.two + 4,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
+    gap: Spacing.two,
+    position: 'relative',
+  },
+  catIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   categoryName: {
     fontSize: 12,
     fontWeight: '700',
     flex: 1,
   },
+  selectedCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+  },
+  quickTagsSection: {
+    padding: Spacing.three,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    gap: Spacing.two,
+  },
+  quickTagsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickTagsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quickTagsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  clearText: {
+    fontSize: 12,
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  tagGroup: {
+    gap: 6,
+    marginTop: 4,
+  },
+  tagGroupLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.one + 2,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.two + 2,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  zoneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  zoneChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  descBlock: {
+    gap: Spacing.one,
+  },
+  descLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  counterText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   textAreaWrapper: {
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: Spacing.three,
   },
   textArea: {
     fontSize: 14,
-    minHeight: 100,
+    minHeight: 80,
+    lineHeight: 20,
   },
   urgencyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
     padding: Spacing.three,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginTop: Spacing.one,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    gap: Spacing.two,
+  },
+  urgencyIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   urgencyTextWrap: {
     flex: 1,
@@ -738,6 +1248,42 @@ const styles = StyleSheet.create({
   },
   urgencyDesc: {
     fontSize: 11,
+    marginTop: 2,
+  },
+  primaryNextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.three + 2,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    elevation: 3,
+  },
+  primaryNextBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  giantGpsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.four,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    gap: Spacing.three,
+    elevation: 3,
+  },
+  giantGpsTextWrap: {
+    flex: 1,
+  },
+  giantGpsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  giantGpsSub: {
+    fontSize: 12,
+    marginTop: 2,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -746,24 +1292,85 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Platform.OS === 'ios' ? Spacing.two + 4 : Spacing.one,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   textInput: {
     flex: 1,
     fontSize: 14,
   },
-  gpsButton: {
+  buttonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  prevBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.two,
     paddingVertical: Spacing.three,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
+    gap: Spacing.one,
   },
-  gpsButtonText: {
-    fontSize: 13,
+  prevBtnText: {
+    fontSize: 14,
     fontWeight: '700',
+  },
+  nextBtnHalf: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.three,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.two,
+  },
+  nextBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  summaryCard: {
+    padding: Spacing.four,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    gap: Spacing.two,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.one,
+  },
+  summaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  summaryBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    alignItems: 'baseline',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    width: 60,
+  },
+  summaryVal: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
   mediaButtonsRow: {
     flexDirection: 'row',
@@ -785,10 +1392,9 @@ const styles = StyleSheet.create({
   },
   evidencePreviewContainer: {
     position: 'relative',
-    height: 180,
+    height: 160,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    marginTop: Spacing.one,
   },
   previewImage: {
     width: '100%',
@@ -809,10 +1415,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 8,
     left: 8,
-    backgroundColor: 'rgba(4, 120, 87, 0.9)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     paddingHorizontal: Spacing.two,
     paddingVertical: 3,
     borderRadius: BorderRadius.sm,
@@ -823,83 +1429,58 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pinCard: {
-    padding: Spacing.four,
+    padding: Spacing.three + 2,
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
     gap: Spacing.two,
-    marginTop: Spacing.one,
   },
-  pinCardHeader: {
+  pinHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pinIconTitle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 6,
   },
   pinCardTitle: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  genPinBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  genPinBtnText: {
+    color: '#065F46',
+    fontSize: 11,
     fontWeight: '800',
   },
   pinCardDesc: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
   },
   pinInputsRow: {
     flexDirection: 'row',
     gap: Spacing.two,
-    marginTop: Spacing.one,
   },
   pinInputWrap: {
     flex: 1,
-    paddingHorizontal: Spacing.two + 2,
-    paddingVertical: Platform.OS === 'ios' ? Spacing.two : Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Platform.OS === 'ios' ? Spacing.two : 4,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
   pinInput: {
     fontSize: 14,
+    fontWeight: '700',
     textAlign: 'center',
-    fontWeight: '700',
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    marginTop: Spacing.two,
-  },
-  prevButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.one,
-    paddingVertical: Spacing.three,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-  },
-  prevButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.three,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.two,
-  },
-  nextButtonHalf: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.three,
-    borderRadius: BorderRadius.lg,
-  },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
   submitFinalBtn: {
     flex: 2,
@@ -907,12 +1488,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
-    paddingVertical: Spacing.three,
+    paddingVertical: Spacing.three + 2,
     borderRadius: BorderRadius.lg,
+    elevation: 4,
   },
   submitFinalBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
 });

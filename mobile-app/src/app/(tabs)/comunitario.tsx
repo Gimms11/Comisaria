@@ -56,12 +56,44 @@ export default function CommunityFeedScreen() {
   };
 
   const filteredReports = reports.filter((r) => {
-    if (selectedCategory === 'all') return true;
-    return (
-      r.category?.id === selectedCategory ||
-      r.category?.slug === selectedCategory ||
-      r.category_name === selectedCategory
+    if (selectedCategory === 'all' || !selectedCategory) return true;
+
+    const targetCategory = categories.find(
+      (c) =>
+        c.id === selectedCategory ||
+        c.slug === selectedCategory ||
+        c.name.toLowerCase() === selectedCategory.toLowerCase()
     );
+
+    const reportCatId = r.category?.id || r.category_id;
+    const reportCatSlug = r.category?.slug || r.category_slug;
+    const reportCatName = (r.category?.name || r.category_name || '').trim().toLowerCase();
+
+    // 1. Direct ID or slug match
+    if (reportCatId && (reportCatId === selectedCategory || (targetCategory && reportCatId === targetCategory.id))) {
+      return true;
+    }
+    if (reportCatSlug && (reportCatSlug === selectedCategory || (targetCategory && reportCatSlug === targetCategory.slug))) {
+      return true;
+    }
+
+    // 2. Exact or substring name match
+    if (targetCategory && targetCategory.name) {
+      const targetName = targetCategory.name.trim().toLowerCase();
+      if (reportCatName === targetName) {
+        return true;
+      }
+      const targetWords = targetName.split(' ').filter((w) => w.length > 3);
+      if (targetWords.some((w) => reportCatName.includes(w))) {
+        return true;
+      }
+    }
+
+    if (reportCatName && reportCatName === selectedCategory.toLowerCase().trim()) {
+      return true;
+    }
+
+    return false;
   });
 
   const renderHeader = () => (
@@ -110,7 +142,10 @@ export default function CommunityFeedScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.categoryFilterList}
           renderItem={({ item }) => {
-            const isSelected = selectedCategory === item.id || (item.id === 'all' && selectedCategory === 'all');
+            const isSelected =
+              selectedCategory === item.id ||
+              (item.id === 'all' && selectedCategory === 'all') ||
+              (item.slug === 'all' && selectedCategory === 'all');
             return (
               <Pressable
                 onPress={() => setSelectedCategory(item.id)}
@@ -275,6 +310,18 @@ export default function CommunityFeedScreen() {
               <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
                 Sé el primero en registrar un problema de tu barrio.
               </Text>
+              {selectedCategory !== 'all' && (
+                <Pressable
+                  onPress={() => setSelectedCategory('all')}
+                  style={({ pressed }) => [
+                    styles.resetFilterBtn,
+                    { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <Feather name="refresh-cw" size={14} color="#FFFFFF" />
+                  <Text style={styles.resetFilterBtnText}>Ver todas las incidencias</Text>
+                </Pressable>
+              )}
             </View>
           }
         />
@@ -467,5 +514,19 @@ const styles = StyleSheet.create({
   },
   emptyDesc: {
     fontSize: 13,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two + 2,
+    borderRadius: BorderRadius.full,
+    marginTop: Spacing.two,
+  },
+  resetFilterBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

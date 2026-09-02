@@ -6,8 +6,8 @@ import {
   ScrollView,
   Pressable,
   RefreshControl,
-  Dimensions,
   Platform,
+  Linking,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -51,6 +51,11 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  const handleCallEmergency = (number: string) => {
+    const clean = number.replace(/[^\d+]/g, '');
+    Linking.openURL(`tel:${clean}`).catch(() => {});
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <AppHeader />
@@ -67,72 +72,105 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Banner de Bienvenida y Seguridad */}
-        <View
-          style={[
-            styles.heroBanner,
-            {
-              backgroundColor: theme.primaryDark,
-              borderColor: theme.cardBorder,
-            },
-          ]}
-        >
-          <View style={styles.heroTextContent}>
-            <View style={styles.heroBadge}>
-              <Feather name="shield" size={13} color="#D1FAE5" />
-              <Text style={styles.heroBadgeText}>FASE 1 — CANAL OFICIAL</Text>
-            </View>
-            <Text style={styles.heroTitle}>
-              Seguridad Ciudadana al Alcance de Todos
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              Denuncia delitos en forma 100% anónima o reporta fallas urbanas de tu barrio sin crear cuenta.
-            </Text>
+        {/* 1. Quick Emergency Dial Bar (For when in immediate danger) */}
+        <View style={[styles.sosQuickBar, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
+          <View style={styles.sosLeft}>
+            <View style={styles.sosPulseDot} />
+            <Text style={styles.sosBarTitle}>LÍNEA DE EMERGENCIA 24/7</Text>
+          </View>
+          <View style={styles.sosButtonsRow}>
+            <Pressable
+              onPress={() => handleCallEmergency('105')}
+              style={({ pressed }) => [
+                styles.sosCallBtn,
+                { backgroundColor: '#DC2626', opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <Feather name="phone-call" size={13} color="#FFFFFF" />
+              <Text style={styles.sosCallBtnText}>105 PNP</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleCallEmergency('056256114')}
+              style={({ pressed }) => [
+                styles.sosCallBtnSec,
+                { backgroundColor: '#FFFFFF', borderColor: '#DC2626', opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <Feather name="phone" size={12} color="#DC2626" />
+              <Text style={styles.sosCallBtnSecText}>Comisaría</Text>
+            </Pressable>
           </View>
         </View>
 
-        {/* 2 Botones de Acción Primarios */}
+        {/* 2. HERO CARD: PRINCIPAL USE CASE — DENUNCIA ANÓNIMA EXPRÉS */}
+        <Pressable
+          onPress={() => router.push('/denuncia/nueva' as any)}
+          style={({ pressed }) => [
+            styles.heroCard,
+            {
+              backgroundColor: '#991B1B',
+              borderColor: '#B91C1C',
+              opacity: pressed ? 0.95 : 1,
+            },
+          ]}
+        >
+          {/* Top meta badge */}
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroSafetyBadge}>
+              <Feather name="shield" size={13} color="#FEF2F2" />
+              <Text style={styles.heroSafetyText}>100% ANÓNIMO • ZERO RASTREO</Text>
+            </View>
+            <View style={styles.heroTimeBadge}>
+              <Feather name="clock" size={11} color="#FEF2F2" />
+              <Text style={styles.heroTimeText}>15 SEGUNDOS</Text>
+            </View>
+          </View>
+
+          {/* Main Title & Subtitle */}
+          <View style={styles.heroBody}>
+            <Text style={styles.heroMainTitle}>
+              ¿Testigo o Víctima de un Delito?
+            </Text>
+            <Text style={styles.heroMainSub}>
+              Robos, extorsión, violencia o sujetos armados. Registra tu denuncia con 1 toque sin escribir tu nombre ni DNI.
+            </Text>
+          </View>
+
+          {/* Fast features bar */}
+          <View style={styles.heroFeaturesRow}>
+            <View style={styles.heroFeatureItem}>
+              <Feather name="zap" size={13} color="#FDE047" />
+              <Text style={styles.heroFeatureText}>1-Toque Descriptores</Text>
+            </View>
+            <View style={styles.heroFeatureItem}>
+              <Feather name="navigation" size={13} color="#FDE047" />
+              <Text style={styles.heroFeatureText}>GPS Automático</Text>
+            </View>
+            <View style={styles.heroFeatureItem}>
+              <Feather name="camera" size={13} color="#FDE047" />
+              <Text style={styles.heroFeatureText}>Foto Segura</Text>
+            </View>
+          </View>
+
+          {/* CTA Button */}
+          <View style={styles.heroCtaBtn}>
+            <Text style={styles.heroCtaText}>DENUNCIAR AHORA</Text>
+            <Feather name="arrow-right" size={18} color="#991B1B" />
+          </View>
+        </Pressable>
+
+        {/* 3. SECONDARY BENTO GRID */}
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
-          ¿Qué deseas realizar hoy?
+          Servicios Ciudadanos
         </Text>
 
-        <View style={styles.primaryGrid}>
-          {/* Card 1: Denuncia Anónima */}
-          <Pressable
-            onPress={() => router.push('/denuncia/nueva' as any)}
-            style={({ pressed }) => [
-              styles.primaryCard,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-                opacity: pressed ? 0.9 : 1,
-              },
-            ]}
-          >
-            <View style={[styles.cardIconBox, { backgroundColor: '#DC2626' }]}>
-              <Feather name="alert-triangle" size={24} color="#FFFFFF" />
-            </View>
-            <View style={styles.cardContent}>
-              <View style={styles.cardTitleRow}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  Denuncia Anónima
-                </Text>
-                <View style={styles.zeroTraceBadge}>
-                  <Text style={styles.zeroTraceText}>Zero Datos</Text>
-                </View>
-              </View>
-              <Text style={[styles.cardDesc, { color: theme.textSecondary }]}>
-                Extorsión, robos, sospechosos o violencia. Tu identidad está 100% protegida.
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </Pressable>
-
-          {/* Card 2: Reporte Comunitario */}
+        <View style={styles.bentoGrid}>
+          {/* Bento 1: Reporte Comunitario */}
           <Pressable
             onPress={() => router.push('/comunitario/nuevo' as any)}
             style={({ pressed }) => [
-              styles.primaryCard,
+              styles.bentoCard,
               {
                 backgroundColor: theme.card,
                 borderColor: theme.cardBorder,
@@ -140,87 +178,82 @@ export default function HomeScreen() {
               },
             ]}
           >
-            <View style={[styles.cardIconBox, { backgroundColor: '#0284C7' }]}>
-              <Feather name="map-pin" size={24} color="#FFFFFF" />
+            <View style={[styles.bentoIconBox, { backgroundColor: '#E0F2FE' }]}>
+              <Feather name="map-pin" size={22} color="#0284C7" />
             </View>
-            <View style={styles.cardContent}>
-              <View style={styles.cardTitleRow}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  Reporte Comunitario
+            <View style={styles.bentoInfo}>
+              <View style={styles.bentoTitleRow}>
+                <Text style={[styles.bentoTitle, { color: theme.text }]}>
+                  Reporte Vecinal
                 </Text>
-                <View style={[styles.zeroTraceBadge, { backgroundColor: '#E0F2FE' }]}>
-                  <Text style={[styles.zeroTraceText, { color: '#0369A1' }]}>Muro Vecinal</Text>
+                <View style={[styles.bentoBadge, { backgroundColor: '#E0F2FE' }]}>
+                  <Text style={[styles.bentoBadgeText, { color: '#0369A1' }]}>Muro Cívico</Text>
                 </View>
               </View>
-              <Text style={[styles.cardDesc, { color: theme.textSecondary }]}>
-                Baches, alumbrado apagado, basura y fallas urbanas con tarjeta para compartir en WhatsApp.
+              <Text style={[styles.bentoDesc, { color: theme.textSecondary }]}>
+                Alumbrado apagado, baches o basura con tarjeta para WhatsApp.
               </Text>
             </View>
-            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            <Feather name="chevron-right" size={18} color={theme.textSecondary} />
           </Pressable>
-        </View>
 
-        {/* Accesos Rápidos Secundarios */}
-        <View style={styles.secondaryGrid}>
-          <Pressable
-            onPress={() => router.push('/(tabs)/seguimiento' as any)}
-            style={({ pressed }) => [
-              styles.secondaryCard,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <View style={[styles.secIconBox, { backgroundColor: theme.primaryLight }]}>
-              <Feather name="search" size={20} color={theme.primary} />
-            </View>
-            <View>
-              <Text style={[styles.secTitle, { color: theme.text }]}>
+          {/* Bento 2: Consultar Estado */}
+          <View style={styles.bentoHalfRow}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/seguimiento' as any)}
+              style={({ pressed }) => [
+                styles.bentoHalfCard,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <View style={[styles.bentoSmallIcon, { backgroundColor: theme.primaryLight }]}>
+                <Feather name="search" size={18} color={theme.primary} />
+              </View>
+              <Text style={[styles.bentoHalfTitle, { color: theme.text }]}>
                 Consultar Estado
               </Text>
-              <Text style={[styles.secDesc, { color: theme.textSecondary }]}>
-                Rastreo por código LT-2026
+              <Text style={[styles.bentoHalfSub, { color: theme.textSecondary }]}>
+                Rastreo código LT-2026
               </Text>
-            </View>
-          </Pressable>
+            </Pressable>
 
-          <Pressable
-            onPress={() => router.push('/(tabs)/guias' as any)}
-            style={({ pressed }) => [
-              styles.secondaryCard,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <View style={[styles.secIconBox, { backgroundColor: '#FEF3C7' }]}>
-              <Feather name="play" size={20} color="#D97706" />
-            </View>
-            <View>
-              <Text style={[styles.secTitle, { color: theme.text }]}>
-                Guías TikTok
+            {/* Bento 3: Guías Preventivas */}
+            <Pressable
+              onPress={() => router.push('/(tabs)/guias' as any)}
+              style={({ pressed }) => [
+                styles.bentoHalfCard,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <View style={[styles.bentoSmallIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Feather name="play-circle" size={18} color="#D97706" />
+              </View>
+              <Text style={[styles.bentoHalfTitle, { color: theme.text }]}>
+                Guías de Ayuda
               </Text>
-              <Text style={[styles.secDesc, { color: theme.textSecondary }]}>
-                Videos y consejos rápidos
+              <Text style={[styles.bentoHalfSub, { color: theme.textSecondary }]}>
+                Videos y trámites DNI
               </Text>
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Mis Reportes Guardados Localmente */}
+        {/* 4. MIS DENUNCIAS / REPORTES GUARDADOS */}
         {myReports.length > 0 && (
           <View style={styles.savedSection}>
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>
-                Mis Códigos Guardados ({myReports.length})
+                Mis Códigos en este equipo ({myReports.length})
               </Text>
-              <Pressable
-                onPress={() => router.push('/(tabs)/seguimiento' as any)}
-              >
+              <Pressable onPress={() => router.push('/(tabs)/seguimiento' as any)}>
                 <Text style={[styles.seeAllText, { color: theme.primary }]}>
                   Ver todos
                 </Text>
@@ -268,7 +301,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Carrusel de Guías Destacadas */}
+        {/* 5. CARRUSEL DE GUÍAS DESTACADAS */}
         <View style={styles.guidesSection}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>
@@ -326,9 +359,9 @@ export default function HomeScreen() {
 
         {/* Footer info distrital */}
         <View style={[styles.footerCard, { backgroundColor: theme.backgroundElement }]}>
-          <Feather name="info" size={16} color={theme.textSecondary} />
+          <Feather name="shield" size={16} color={theme.textSecondary} />
           <Text style={[styles.footerText, { color: theme.textSecondary }]}>
-            Comisaría Rural PNP La Tinguiña — Distrito de La Tinguiña, Provincia de Ica. Todos los reportes son procesados con reserva de identidad.
+            Comisaría Rural PNP La Tinguiña — Ica. Todos los reportes son procesados con absoluta reserva y protección de identidad.
           </Text>
         </View>
       </ScrollView>
@@ -354,42 +387,158 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
     paddingBottom: Spacing.seven,
   },
-  heroBanner: {
+  sosQuickBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.three,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.four,
-    borderWidth: 1,
-    overflow: 'hidden',
+    borderWidth: 1.5,
   },
-  heroTextContent: {
-    gap: Spacing.two,
+  sosLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  heroBadge: {
+  sosPulseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#DC2626',
+  },
+  sosBarTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#991B1B',
+    letterSpacing: 0.5,
+  },
+  sosButtonsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  sosCallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.two + 2,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  sosCallBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 11,
+  },
+  sosCallBtnSec: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.two + 2,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  sosCallBtnSecText: {
+    color: '#DC2626',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  heroCard: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.four,
+    borderWidth: 1.5,
+    gap: Spacing.three,
+    elevation: 6,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 20px rgba(153, 27, 27, 0.35)' },
+      default: {
+        shadowColor: '#991B1B',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+      },
+    }),
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroSafetyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: Spacing.two + 2,
     paddingVertical: 3,
     borderRadius: BorderRadius.full,
   },
-  heroBadgeText: {
-    color: '#D1FAE5',
-    fontWeight: '800',
+  heroSafetyText: {
+    color: '#FFFFFF',
     fontSize: 10,
+    fontWeight: '900',
     letterSpacing: 0.5,
   },
-  heroTitle: {
+  heroTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  heroTimeText: {
+    color: '#FDE047',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  heroBody: {
+    gap: 4,
+  },
+  heroMainTitle: {
     color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 21,
+    fontWeight: '900',
     lineHeight: 26,
     letterSpacing: -0.3,
   },
-  heroSubtitle: {
-    color: 'rgba(255,255,255,0.85)',
+  heroMainSub: {
+    color: '#FEE2E2',
     fontSize: 13,
     lineHeight: 18,
+  },
+  heroFeaturesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    padding: Spacing.two + 2,
+    borderRadius: BorderRadius.lg,
+  },
+  heroFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroFeatureText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  heroCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: Spacing.three,
+    borderRadius: BorderRadius.lg,
+  },
+  heroCtaText: {
+    color: '#991B1B',
+    fontWeight: '900',
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
   sectionTitle: {
     fontSize: 17,
@@ -406,87 +555,75 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  primaryGrid: {
-    gap: Spacing.three,
+  bentoGrid: {
+    gap: Spacing.two,
   },
-  primaryCard: {
+  bentoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.four,
+    padding: Spacing.three + 2,
     borderRadius: BorderRadius.xl,
-    borderWidth: 1,
+    borderWidth: 1.5,
     gap: Spacing.three,
-    elevation: 2,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-    }),
   },
-  cardIconBox: {
-    width: 48,
-    height: 48,
+  bentoIconBox: {
+    width: 44,
+    height: 44,
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardContent: {
+  bentoInfo: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
-  cardTitleRow: {
+  bentoTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  cardTitle: {
-    fontSize: 16,
+  bentoTitle: {
+    fontSize: 15,
     fontWeight: '800',
   },
-  zeroTraceBadge: {
-    backgroundColor: '#FEE2E2',
+  bentoBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: BorderRadius.sm,
   },
-  zeroTraceText: {
-    color: '#DC2626',
-    fontWeight: '800',
+  bentoBadgeText: {
     fontSize: 10,
+    fontWeight: '800',
   },
-  cardDesc: {
+  bentoDesc: {
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
   },
-  secondaryGrid: {
+  bentoHalfRow: {
     flexDirection: 'row',
     gap: Spacing.two,
   },
-  secondaryCard: {
+  bentoHalfCard: {
     flex: 1,
     padding: Spacing.three,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    gap: Spacing.two,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    gap: Spacing.one + 2,
   },
-  secIconBox: {
-    width: 36,
-    height: 36,
+  bentoSmallIcon: {
+    width: 34,
+    height: 34,
     borderRadius: BorderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  secTitle: {
+  bentoHalfTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  secDesc: {
+  bentoHalfSub: {
     fontSize: 11,
-    marginTop: 2,
+    lineHeight: 15,
   },
   savedSection: {
     gap: Spacing.two,

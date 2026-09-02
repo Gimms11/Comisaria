@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Button } from './Button';
+import { resolveMediaUrl } from '../../lib/utils';
 
 export interface EvidenceItem {
   id?: string;
@@ -135,7 +136,7 @@ export const EvidenceViewerModal: React.FC<EvidenceViewerModalProps> = ({
 
           <div className="flex items-center gap-2 shrink-0">
             <a
-              href={currentItem.url}
+              href={resolveMediaUrl(currentItem.url)}
               target="_blank"
               rel="noopener noreferrer"
               download
@@ -178,7 +179,7 @@ export const EvidenceViewerModal: React.FC<EvidenceViewerModalProps> = ({
               </div>
             )}
             <img
-              src={currentItem.url}
+              src={resolveMediaUrl(currentItem.url)}
               alt={currentItem.caption || `Evidencia ${currentIndex + 1}`}
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgLoaded(true)}
@@ -217,7 +218,7 @@ export const EvidenceViewerModal: React.FC<EvidenceViewerModalProps> = ({
                 }`}
               >
                 <img
-                  src={item.thumbnailUrl || item.url}
+                  src={resolveMediaUrl(item.thumbnailUrl || item.url)}
                   alt={`Miniatura ${idx + 1}`}
                   className="w-full h-full object-cover"
                 />

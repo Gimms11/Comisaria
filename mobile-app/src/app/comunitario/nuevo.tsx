@@ -22,6 +22,10 @@ import { useTheme } from '@/hooks/use-theme';
 import { Category } from '@/types';
 import { CommunityReportsService } from '@/services/communityReportsService';
 import { StorageService } from '@/services/storageService';
+import {
+  COMMUNITY_QUICK_PRESETS,
+  LA_TINGUINA_ZONES,
+} from '@/constants/crimePresets';
 
 export default function NewCommunityReportScreen() {
   const theme = useTheme();
@@ -45,22 +49,47 @@ export default function NewCommunityReportScreen() {
     });
   }, []);
 
+  const handleToggleCivicTag = (tag: string) => {
+    setDescription((prev) => {
+      const parts = prev.split(' • ').map((p) => p.trim()).filter(Boolean);
+      const index = parts.findIndex((p) => p.toLowerCase() === tag.toLowerCase());
+      if (index >= 0) {
+        parts.splice(index, 1);
+        return parts.join(' • ');
+      } else {
+        parts.push(tag);
+        return parts.join(' • ');
+      }
+    });
+  };
+
+  const handleToggleZone = (zone: string) => {
+    setAddress((prev) => {
+      if (prev.trim().toLowerCase() === zone.trim().toLowerCase()) {
+        return '';
+      }
+      return zone;
+    });
+  };
+
   const handleGetLocation = async () => {
     setGpsLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso no concedido', 'Puedes ingresar la dirección o referencia manualmente.');
+        Alert.alert('Permiso no concedido', 'Puedes tocar una de las zonas frecuentes de La Tinguiña.');
         setGpsLoading(false);
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({});
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
       if (!address) {
-        setAddress(`Ubicación GPS: ${loc.coords.latitude.toFixed(5)}, ${loc.coords.longitude.toFixed(5)}`);
+        setAddress(`GPS: ${loc.coords.latitude.toFixed(5)}, ${loc.coords.longitude.toFixed(5)} (La Tinguiña)`);
       }
     } catch {
-      Alert.alert('Aviso', 'No se pudo obtener el GPS. Ingrese la dirección manualmente.');
+      Alert.alert('Aviso', 'Puedes seleccionar una zona de La Tinguiña con 1 toque.');
     } finally {
       setGpsLoading(false);
     }
@@ -108,46 +137,54 @@ export default function NewCommunityReportScreen() {
       return;
     }
     if (!description.trim() || description.trim().length < 8) {
-      Alert.alert('Descripción requerida', 'Describe brevemente el problema vecinal (mínimo 8 caracteres).');
+      Alert.alert('Descripción requerida', 'Toca los botones de detalle rápido para describir el problema.');
       return;
     }
-    if (!address.trim()) {
-      Alert.alert('Ubicación requerida', 'Por favor ingresa la calle, avenida o referencia del lugar.');
+    if (!address.trim() && !coords) {
+      Alert.alert('Ubicación requerida', 'Por favor toca el botón GPS o elige una zona de La Tinguiña.');
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. Create community report
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('[ComunitarioNuevo] 🚀 Enviando reporte comunitario a MS-03...');
+      console.log('[ComunitarioNuevo] Categoría:', selectedCategory.name, `(${selectedCategory.id})`);
+      console.log('[ComunitarioNuevo] Dirección:', address.trim() || 'Sector urbano La Tinguiña, Ica');
+      console.log('[ComunitarioNuevo] Evidencia adjunta:', evidenceUri ? evidenceUri : 'Ninguna');
+
       const response = await CommunityReportsService.createReport({
         category_id: selectedCategory.id,
         description: description.trim(),
         latitude: coords?.lat || null,
         longitude: coords?.lng || null,
-        address_reference: address.trim(),
+        address_reference: address.trim() || 'Sector urbano La Tinguiña, Ica',
       });
 
-      // 2. Upload photo if selected
+      console.log('[ComunitarioNuevo] ✅ Reporte comunitario creado exitosamente con código:', response.public_code);
+
       if (evidenceUri) {
+        console.log('[ComunitarioNuevo] 📸 Subiendo foto de evidencia para código:', response.public_code);
         try {
-          await CommunityReportsService.uploadEvidence(response.public_code, evidenceUri);
-        } catch (e) {
-          console.warn('Community media upload warning:', e);
+          const uploadRes = await CommunityReportsService.uploadEvidence(response.public_code, evidenceUri);
+          console.log('[ComunitarioNuevo] ✅ Foto comunitaria adjuntada con éxito:', uploadRes);
+        } catch (e: any) {
+          console.error('[ComunitarioNuevo] ❌ Error al subir foto comunitaria:', e?.message || e);
         }
+      } else {
+        console.log('[ComunitarioNuevo] ℹ️ Reporte comunitario enviado sin foto adjunta.');
       }
 
-      // 3. Save receipt locally
       await StorageService.saveReportReceipt({
         public_code: response.public_code,
         type: 'reporte_comunitario',
         category_name: selectedCategory.name,
         created_at: response.created_at,
-        address_reference: address.trim(),
+        address_reference: address.trim() || 'La Tinguiña',
         description_summary: description.trim().slice(0, 80),
       });
 
-      // 4. Navigate to report detail with social card
       router.replace(`/comunitario/${response.public_code}` as any);
     } catch (error: any) {
       Alert.alert(
@@ -159,6 +196,12 @@ export default function NewCommunityReportScreen() {
     }
   };
 
+  const activeCivicTags = selectedCategory
+    ? COMMUNITY_QUICK_PRESETS[selectedCategory.id] || COMMUNITY_QUICK_PRESETS.default
+    : COMMUNITY_QUICK_PRESETS.default;
+
+  const isValid = description.trim().length >= 8 && (address.trim().length > 0 || coords !== null);
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { backgroundColor: theme.background }]}
@@ -166,7 +209,7 @@ export default function NewCommunityReportScreen() {
     >
       <AppHeader
         title="Reporte Comunitario"
-        subtitle="Problemas de infraestructura vecinal"
+        subtitle="Muro Cívico Vecinal"
         showBack
       />
 
@@ -175,15 +218,15 @@ export default function NewCommunityReportScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Info card */}
+        {/* Info banner */}
         <View style={[styles.infoBanner, { backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}>
           <Feather name="info" size={16} color="#0284C7" />
           <Text style={styles.infoText}>
-            Este reporte será visible públicamente en el muro vecinal para coordinar solución con autoridades y ser difundido en redes.
+            Tu reporte será publicado en el muro vecinal para coordinar atención comunitaria y generar tarjeta WhatsApp.
           </Text>
         </View>
 
-        {/* Categories */}
+        {/* 1. Category Selection */}
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           1. Tipo de Falla o Problema Urbano:
         </Text>
@@ -195,19 +238,27 @@ export default function NewCommunityReportScreen() {
               <Pressable
                 key={cat.id}
                 onPress={() => setSelectedCategory(cat)}
-                style={[
+                style={({ pressed }) => [
                   styles.categoryCard,
                   {
                     backgroundColor: isSelected ? '#E0F2FE' : theme.card,
                     borderColor: isSelected ? '#0284C7' : theme.cardBorder,
+                    opacity: pressed ? 0.9 : 1,
                   },
                 ]}
               >
-                <Feather
-                  name="map-pin"
-                  size={18}
-                  color={isSelected ? '#0284C7' : theme.textSecondary}
-                />
+                <View
+                  style={[
+                    styles.catIconCircle,
+                    { backgroundColor: isSelected ? '#0284C7' : theme.backgroundElement },
+                  ]}
+                >
+                  <Feather
+                    name="map-pin"
+                    size={16}
+                    color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                  />
+                </View>
                 <Text
                   style={[
                     styles.categoryName,
@@ -216,86 +267,206 @@ export default function NewCommunityReportScreen() {
                 >
                   {cat.name}
                 </Text>
+                {isSelected && (
+                  <View style={styles.selectedCheck}>
+                    <Feather name="check" size={12} color="#0284C7" />
+                  </View>
+                )}
               </Pressable>
             );
           })}
         </View>
 
-        {/* Description */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: Spacing.two }]}>
-          2. Detalle del Problema:
+        {/* 2. Quick Civic Descriptors */}
+        <View style={[styles.quickTagsSection, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={styles.quickTagsHeader}>
+            <View style={styles.quickTagsTitleRow}>
+              <Feather name="zap" size={16} color="#0284C7" />
+              <Text style={[styles.quickTagsTitle, { color: theme.text }]}>
+                Toque rápido para describir la falla:
+              </Text>
+            </View>
+            {description.length > 0 && (
+              <Pressable onPress={() => setDescription('')}>
+                <Text style={styles.clearText}>Limpiar</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View style={styles.chipsWrap}>
+            {activeCivicTags.map((tag, tIdx) => {
+              const isAdded = description
+                .split(' • ')
+                .map((p) => p.trim().toLowerCase())
+                .includes(tag.trim().toLowerCase());
+              return (
+                <Pressable
+                  key={tIdx}
+                  onPress={() => handleToggleCivicTag(tag)}
+                  style={({ pressed }) => [
+                    styles.presetChip,
+                    {
+                      backgroundColor: isAdded ? '#0284C7' : theme.backgroundElement,
+                      borderColor: isAdded ? '#0284C7' : theme.cardBorder,
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name={isAdded ? 'check' : 'plus'}
+                    size={12}
+                    color={isAdded ? '#FFFFFF' : theme.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      { color: isAdded ? '#FFFFFF' : theme.text },
+                    ]}
+                  >
+                    {tag}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Description Field */}
+        <View style={styles.descBlock}>
+          <View style={styles.descLabelRow}>
+            <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>
+              2. Detalle del Problema:
+            </Text>
+            <Text
+              style={[
+                styles.counterText,
+                { color: description.trim().length >= 8 ? '#16A34A' : theme.textSecondary },
+              ]}
+            >
+              {description.trim().length >= 8 ? '✓ Listo' : 'Mínimo 8 letras'}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.textAreaWrapper,
+              {
+                backgroundColor: theme.card,
+                borderColor: description.trim().length >= 8 ? '#0284C7' : theme.cardBorder,
+              },
+            ]}
+          >
+            <TextInput
+              style={[styles.textArea, { color: theme.text }]}
+              placeholder="Toca los botones arriba o escribe aquí el estado de la falla..."
+              placeholderTextColor={theme.textMuted}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        {/* 3. Location: GPS + La Tinguiña Zones */}
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          3. Ubicación del Problema:
         </Text>
 
-        <View
-          style={[
-            styles.textAreaWrapper,
+        <Pressable
+          onPress={handleGetLocation}
+          disabled={gpsLoading}
+          style={({ pressed }) => [
+            styles.giantGpsBtn,
             {
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
+              backgroundColor: coords ? '#DCFCE7' : '#0284C7',
+              borderColor: coords ? '#16A34A' : '#0369A1',
+              opacity: pressed || gpsLoading ? 0.85 : 1,
             },
           ]}
         >
-          <TextInput
-            style={[styles.textArea, { color: theme.text }]}
-            placeholder="Describe el estado de la falla, riesgo para peatones o vehículos..."
-            placeholderTextColor={theme.textMuted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
+          {gpsLoading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Feather
+              name={coords ? 'check-circle' : 'navigation'}
+              size={20}
+              color={coords ? '#16A34A' : '#FFFFFF'}
+            />
+          )}
+          <View style={styles.giantGpsTextWrap}>
+            <Text style={[styles.giantGpsTitle, { color: coords ? '#15803D' : '#FFFFFF' }]}>
+              {coords ? '✓ Ubicación GPS Fijada' : 'Fijar Mi Ubicación GPS (1 Toque)'}
+            </Text>
+            <Text style={[styles.giantGpsSub, { color: coords ? '#166534' : 'rgba(255,255,255,0.85)' }]}>
+              {coords ? `GPS: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Detecta la calle exacta automáticamente'}
+            </Text>
+          </View>
+        </Pressable>
 
-        {/* Location */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: Spacing.two }]}>
-          3. Ubicación o Referencia:
-        </Text>
+        {/* Zone chips */}
+        <View style={[styles.quickTagsSection, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <Text style={[styles.tagGroupLabel, { color: theme.textSecondary }]}>
+            Zonas de La Tinguiña (1 toque):
+          </Text>
+          <View style={styles.chipsWrap}>
+            {LA_TINGUINA_ZONES.map((zone, zIdx) => {
+              const isSelected = address.trim().toLowerCase() === zone.trim().toLowerCase();
+              return (
+                <Pressable
+                  key={zIdx}
+                  onPress={() => handleToggleZone(zone)}
+                  style={({ pressed }) => [
+                    styles.zoneChip,
+                    {
+                      backgroundColor: isSelected ? '#0284C7' : theme.backgroundElement,
+                      borderColor: isSelected ? '#0284C7' : theme.cardBorder,
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name={isSelected ? 'check' : 'map-pin'}
+                    size={12}
+                    color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.zoneChipText,
+                      { color: isSelected ? '#FFFFFF' : theme.text },
+                    ]}
+                  >
+                    {zone}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         <View
           style={[
             styles.inputWrapper,
             {
               backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
+              borderColor: address.trim().length > 0 ? '#0284C7' : theme.cardBorder,
             },
           ]}
         >
-          <Feather name="map-pin" size={18} color={theme.textSecondary} />
+          <Feather name="map-pin" size={18} color="#0284C7" />
           <TextInput
             style={[styles.textInput, { color: theme.text }]}
-            placeholder="Calle, avenida, cuadra o cruce..."
+            placeholder="Calle, avenida o referencia..."
             placeholderTextColor={theme.textMuted}
             value={address}
             onChangeText={setAddress}
           />
         </View>
 
-        <Pressable
-          onPress={handleGetLocation}
-          disabled={gpsLoading}
-          style={({ pressed }) => [
-            styles.gpsBtn,
-            {
-              backgroundColor: theme.backgroundElement,
-              borderColor: theme.cardBorder,
-              opacity: pressed || gpsLoading ? 0.7 : 1,
-            },
-          ]}
-        >
-          {gpsLoading ? (
-            <ActivityIndicator size="small" color="#0284C7" />
-          ) : (
-            <Feather name="navigation" size={16} color="#0284C7" />
-          )}
-          <Text style={styles.gpsBtnText}>
-            {coords ? '✓ Coordenadas GPS fijadas' : 'Usar mi ubicación GPS actual'}
-          </Text>
-        </Pressable>
-
-        {/* Photo attachment */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: Spacing.two }]}>
-          4. Foto de la Incidencia:
+        {/* 4. Photo Evidence */}
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          4. Foto de la Incidencia (Opcional):
         </Text>
 
         <View style={styles.mediaOptionsRow}>
@@ -353,7 +524,7 @@ export default function NewCommunityReportScreen() {
           style={({ pressed }) => [
             styles.submitBtn,
             {
-              backgroundColor: '#0284C7',
+              backgroundColor: isValid ? '#0284C7' : '#94A3B8',
               opacity: loading || pressed ? 0.85 : 1,
             },
           ]}
@@ -363,7 +534,7 @@ export default function NewCommunityReportScreen() {
           ) : (
             <>
               <Feather name="send" size={18} color="#FFFFFF" />
-              <Text style={styles.submitBtnText}>Publicar Reporte Vecinal</Text>
+              <Text style={styles.submitBtnText}>PUBLICAR EN MURO VECINAL</Text>
             </>
           )}
         </Pressable>
@@ -397,7 +568,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -408,24 +580,132 @@ const styles = StyleSheet.create({
     width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    padding: Spacing.three,
+    padding: Spacing.two + 4,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
+    gap: Spacing.two,
+    position: 'relative',
+  },
+  catIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   categoryName: {
     fontSize: 12,
     fontWeight: '700',
     flex: 1,
   },
+  selectedCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+  },
+  quickTagsSection: {
+    padding: Spacing.three,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    gap: Spacing.two,
+  },
+  quickTagsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickTagsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quickTagsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  clearText: {
+    fontSize: 12,
+    color: '#0284C7',
+    fontWeight: '700',
+  },
+  tagGroupLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.one + 2,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.two + 2,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  zoneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  zoneChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  descBlock: {
+    gap: Spacing.one,
+  },
+  descLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  counterText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   textAreaWrapper: {
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: Spacing.three,
   },
   textArea: {
     fontSize: 14,
-    minHeight: 90,
+    minHeight: 75,
+    lineHeight: 20,
+  },
+  giantGpsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.four,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    gap: Spacing.three,
+    elevation: 3,
+  },
+  giantGpsTextWrap: {
+    flex: 1,
+  },
+  giantGpsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  giantGpsSub: {
+    fontSize: 12,
+    marginTop: 2,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -434,25 +714,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Platform.OS === 'ios' ? Spacing.two + 4 : Spacing.one,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   textInput: {
     flex: 1,
     fontSize: 14,
-  },
-  gpsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.two + 4,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-  },
-  gpsBtnText: {
-    color: '#0284C7',
-    fontSize: 13,
-    fontWeight: '700',
   },
   mediaOptionsRow: {
     flexDirection: 'row',
@@ -474,10 +740,9 @@ const styles = StyleSheet.create({
   },
   previewWrap: {
     position: 'relative',
-    height: 180,
+    height: 160,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    marginTop: Spacing.one,
   },
   previewImg: {
     width: '100%',
@@ -501,11 +766,13 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingVertical: Spacing.three + 2,
     borderRadius: BorderRadius.lg,
-    marginTop: Spacing.two,
+    marginTop: Spacing.one,
+    elevation: 4,
   },
   submitBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
 });

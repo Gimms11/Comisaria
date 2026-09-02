@@ -19,6 +19,9 @@ interface WebSocketState {
 let socket: WebSocket | null = null;
 let pingInterval: any = null;
 let reconnectTimer: any = null;
+let isConnecting = false;
+let connectAbortController: AbortController | null = null;
+const recentAlerts = new Map<string, number>();
 
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   status: 'DISCONNECTED',
@@ -32,20 +35,53 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   },
 
   connect: async () => {
+    // Evitar llamadas concurrentes (ej. StrictMode o múltiples triggers)
+    if (isConnecting) {
+      return;
+    }
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
+
+    isConnecting = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
+    // Abortar intento previo en curso si existiera
+    connectAbortController?.abort();
+    const abortController = new AbortController();
+    connectAbortController = abortController;
 
     set({ status: 'CONNECTING' });
 
     try {
       // 1. Obtener ticket de un solo uso desde MS-01
-      const { ticket } = await api.getWsTicket();
+      const { ticket } = await api.getWsTicket(abortController.signal);
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      // 2. Cerrar socket huérfano previo antes de crear uno nuevo
+      if (socket) {
+        socket.onopen = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.onmessage = null;
+        socket.close();
+        socket = null;
+      }
+
       const wsUrl = api.getWebSocketUrl(ticket);
+      const ws = new WebSocket(wsUrl);
+      socket = ws;
 
-      socket = new WebSocket(wsUrl);
-
-      socket.onopen = () => {
+      ws.onopen = () => {
+        if (socket !== ws) {
+          ws.close();
+          return;
+        }
         set({ status: 'CONNECTED' });
         console.log('[WebSocket Hub] Conectado exitosamente al Centro de Comando');
 
@@ -58,7 +94,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         }, 25000);
       };
 
-      socket.onmessage = (event) => {
+      ws.onmessage = (event) => {
         try {
           if (event.data === 'pong') return;
           const parsed = JSON.parse(event.data);
@@ -75,11 +111,30 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
           const eventType = (parsed.event || parsed.event_type || 'NEW_CRIME_REPORT') as LiveAlertEvent['event_type'];
           const payload = parsed.data || {};
+          const publicCode = payload.public_code || parsed.public_code || 'SIN_CODIGO';
+
+          // Deduplicación en ventana de 6 segundos para evitar alertas dobles
+          const alertKey = `${eventType}:${publicCode}`;
+          const now = Date.now();
+          const lastSeen = recentAlerts.get(alertKey);
+
+          // Limpiar entradas con más de 30 segundos
+          for (const [k, ts] of recentAlerts.entries()) {
+            if (now - ts > 30000) {
+              recentAlerts.delete(k);
+            }
+          }
+
+          if (lastSeen && now - lastSeen < 6000) {
+            console.warn('[WebSocket Hub] Alerta duplicada suprimida:', alertKey);
+            return;
+          }
+          recentAlerts.set(alertKey, now);
 
           const alertEvent: LiveAlertEvent = {
-            id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            id: `${now}-${Math.random().toString(36).substring(2, 7)}`,
             event_type: eventType,
-            public_code: payload.public_code || parsed.public_code || 'SIN_CODIGO',
+            public_code: publicCode,
             priority: (payload.priority || parsed.priority || 'media').toLowerCase(),
             category_name: payload.category_name || parsed.category_name || 'Incidente Policial',
             extra_data: payload.extra_data || parsed.extra_data || {},
@@ -98,8 +153,12 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
           set((state) => {
             const isUrgent = alertEvent.priority === 'urgente' || alertEvent.priority === 'alta';
+            // Filtrar duplicados existentes del mismo código y evento
+            const filteredAlerts = state.alerts.filter(
+              (a) => !(a.public_code === publicCode && a.event_type === eventType)
+            );
             return {
-              alerts: [alertEvent, ...state.alerts.slice(0, 49)],
+              alerts: [alertEvent, ...filteredAlerts.slice(0, 49)],
               latestAlert: alertEvent,
               unreadEmergencyCount: isUrgent
                 ? state.unreadEmergencyCount + 1
@@ -111,7 +170,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         }
       };
 
-      socket.onclose = () => {
+      ws.onclose = () => {
+        if (socket !== ws) return;
         set({ status: 'DISCONNECTED' });
         if (pingInterval) clearInterval(pingInterval);
 
@@ -124,17 +184,24 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         }, 5000);
       };
 
-      socket.onerror = (err) => {
+      ws.onerror = (err) => {
+        if (socket !== ws) return;
         console.warn('[WebSocket Hub] Error de conexión:', err);
-        socket?.close();
+        ws.close();
       };
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
       console.warn('[WebSocket Hub] Fallo al generar ticket:', err);
       set({ status: 'DISCONNECTED' });
+    } finally {
+      isConnecting = false;
     }
   },
 
   disconnect: () => {
+    isConnecting = false;
+    connectAbortController?.abort();
+    connectAbortController = null;
     if (pingInterval) clearInterval(pingInterval);
     if (reconnectTimer) clearTimeout(reconnectTimer);
     if (socket) {
