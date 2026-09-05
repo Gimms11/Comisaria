@@ -29,6 +29,8 @@ export const LoginView: React.FC = () => {
     }
   };
 
+  const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || 'AdminPass2026!';
+
   const handleQuickLogin = (quickEmail: string, quickPass: string) => {
     setEmail(quickEmail);
     setPassword(quickPass);
@@ -112,7 +114,7 @@ export const LoginView: React.FC = () => {
                 variant="outline"
                 size="sm"
                 className="text-[11px] py-1.5 px-2 border-slate-700 bg-slate-950/60 hover:border-sky-500 hover:text-sky-400"
-                onClick={() => handleQuickLogin('admin@comisaria.gob.pe', 'Admin123456!')}
+                onClick={() => handleQuickLogin('admin@tinguina.pnp.gob.pe', DEMO_PASSWORD)}
               >
                 Admin
               </Button>
@@ -121,7 +123,7 @@ export const LoginView: React.FC = () => {
                 size="sm"
                 className="text-[11px] py-1.5 px-2 border-slate-700 bg-slate-950/60 hover:border-amber-500 hover:text-amber-400"
                 onClick={() =>
-                  handleQuickLogin('comisario.tinguina@policia.gob.pe', 'Admin123456!')
+                  handleQuickLogin('comisario.tinguina@policia.gob.pe', DEMO_PASSWORD)
                 }
               >
                 Comisario
@@ -131,7 +133,7 @@ export const LoginView: React.FC = () => {
                 size="sm"
                 className="text-[11px] py-1.5 px-2 border-slate-700 bg-slate-950/60 hover:border-emerald-500 hover:text-emerald-400"
                 onClick={() =>
-                  handleQuickLogin('operador.guardia@policia.gob.pe', 'Admin123456!')
+                  handleQuickLogin('operador@tinguina.pnp.gob.pe', DEMO_PASSWORD)
                 }
               >
                 Operador
@@ -141,7 +143,7 @@ export const LoginView: React.FC = () => {
                 size="sm"
                 className="text-[11px] py-1.5 px-2 border-slate-700 bg-slate-950/60 hover:border-purple-500 hover:text-purple-400"
                 onClick={() =>
-                  handleQuickLogin('moderador.comunitario@policia.gob.pe', 'Admin123456!')
+                  handleQuickLogin('moderador.comunitario@policia.gob.pe', DEMO_PASSWORD)
                 }
               >
                 Moderador
