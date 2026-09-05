@@ -25,5 +25,7 @@ COPY services/ms-02-denuncias-anonimas/app/ /app/app/
 ENV PYTHONPATH=/app:/app/packages
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-EXPOSE 8000
-CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "2"]
+EXPOSE 8080 8000
+CMD ["sh", "-c", "exec gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8080} --forwarded-allow-ips='*' --workers 1 --threads 8 --timeout 300"]
+
+

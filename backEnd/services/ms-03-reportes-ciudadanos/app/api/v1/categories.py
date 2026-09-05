@@ -10,7 +10,9 @@ from app.schemas.category import CategoryResponse
 router = APIRouter(prefix="/categories", tags=["Categorías Comunitarias"])
 
 
+@router.get("", response_model=List[CategoryResponse], include_in_schema=False)
 @router.get("/", response_model=List[CategoryResponse])
+
 async def list_community_categories(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):

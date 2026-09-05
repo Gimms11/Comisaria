@@ -36,7 +36,7 @@ import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { EvidenceViewerModal } from '../ui/EvidenceViewerModal';
 import { WorkflowActionPanel } from '../ui/WorkflowActionPanel';
-import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles, resolveMediaUrl } from '../../lib/utils';
+import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles } from '../../lib/utils';
 
 type SortField =
   | 'public_code'
@@ -925,7 +925,7 @@ export const CrimeReportsView: React.FC = () => {
                           className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center cursor-pointer hover:border-sky-500/60 transition-all shadow-md"
                         >
                           <img
-                            src={resolveMediaUrl(m.thumbnail_url || m.download_url)}
+                            src={m.thumbnail_url || m.download_url}
                             alt={`Evidencia delito ${idx + 1}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           />

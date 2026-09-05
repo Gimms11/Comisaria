@@ -20,16 +20,17 @@ class CivicStorageClient:
     def client(self):
         if self._s3_client is None and settings.STORAGE_ACCESS_KEY and settings.STORAGE_ENDPOINT:
             try:
+                sig = "s3" if "googleapis.com" in settings.STORAGE_ENDPOINT else "s3v4"
                 self._s3_client = boto3.client(
                     "s3",
                     endpoint_url=settings.STORAGE_ENDPOINT,
                     aws_access_key_id=settings.STORAGE_ACCESS_KEY,
                     aws_secret_access_key=settings.STORAGE_SECRET_KEY,
                     config=Config(
-                        signature_version="s3v4",
-                        connect_timeout=1,
-                        read_timeout=1,
-                        retries={"max_attempts": 1},
+                        signature_version=sig,
+                        connect_timeout=3,
+                        read_timeout=10,
+                        retries={"max_attempts": 2},
                     ),
                     region_name="us-central1",
                 )
@@ -42,16 +43,17 @@ class CivicStorageClient:
         if self._public_s3_client is None and settings.STORAGE_ACCESS_KEY:
             endpoint = settings.STORAGE_PUBLIC_URL or settings.STORAGE_ENDPOINT
             try:
+                sig = "s3" if (endpoint and "googleapis.com" in endpoint) else "s3v4"
                 self._public_s3_client = boto3.client(
                     "s3",
                     endpoint_url=endpoint,
                     aws_access_key_id=settings.STORAGE_ACCESS_KEY,
                     aws_secret_access_key=settings.STORAGE_SECRET_KEY,
                     config=Config(
-                        signature_version="s3v4",
-                        connect_timeout=1,
-                        read_timeout=1,
-                        retries={"max_attempts": 1},
+                        signature_version=sig,
+                        connect_timeout=3,
+                        read_timeout=10,
+                        retries={"max_attempts": 2},
                     ),
                     region_name="us-central1",
                 )

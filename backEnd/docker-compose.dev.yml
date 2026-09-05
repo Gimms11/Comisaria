@@ -80,10 +80,8 @@ services:
       mc mb --ignore-existing local/comisaria-evidencias-delitos;
       mc mb --ignore-existing local/comisaria-reportes-urbanos;
       mc mb --ignore-existing local/comisaria-guias-videos;
-      mc anonymous set download local/comisaria-evidencias-delitos;
-      mc anonymous set download local/comisaria-reportes-urbanos;
       mc anonymous set download local/comisaria-guias-videos;
-      echo 'Buckets creados y permisos configurados correctamente';
+      echo 'Buckets creados correctamente';
       exit 0;
       "
 

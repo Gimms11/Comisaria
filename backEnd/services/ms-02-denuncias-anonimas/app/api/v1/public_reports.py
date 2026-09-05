@@ -2,7 +2,14 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from packages.shared.schemas.enums import MediaType
+from packages.shared.schemas.media_validator import (
+    MediaUploadPayload,
+    PayloadTooLargeError,
+    InvalidMediaFormatError,
+)
 from app.core.dependencies import get_db
+
+
 from app.schemas.media import MediaUploadResponse
 from app.schemas.report import (
     CreateReportRequest,
@@ -65,20 +72,34 @@ async def upload_report_evidence(
     Sube evidencia multimedia para una denuncia anónima.
     Despoja 100% de metadatos EXIF / GPS antes de almacenar en el bucket privado.
     """
-    # Validar tamaño y tipo
     contents = await file.read()
-    if len(contents) > 25 * 1024 * 1024:  # Máx 25 MB
+
+    # Validación Pydantic con límites de payload y comprobación de tipo real
+    try:
+        validated_payload = MediaUploadPayload.validate_file(
+            filename=file.filename or "evidence.jpg",
+            content_type=file.content_type or "application/octet-stream",
+            file_bytes=contents,
+            max_size_bytes=25 * 1024 * 1024,
+        )
+
+    except PayloadTooLargeError as exc:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="El archivo supera el límite de 25MB",
+            detail=str(exc),
+        )
+    except (InvalidMediaFormatError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
         )
 
     try:
         media_record = await ReportService.attach_media(
             db=db,
             public_code=public_code,
-            file_bytes=contents,
-            original_filename=file.filename or "evidence.jpg",
+            file_bytes=validated_payload.file_bytes,
+            original_filename=validated_payload.filename,
             media_type=MediaType.FOTO,
         )
         return MediaUploadResponse(
@@ -90,9 +111,12 @@ async def upload_report_evidence(
             status="uploaded",
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        if "Denuncia no encontrada" in str(e):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error procesando la imagen: {str(e)}",
         )
+

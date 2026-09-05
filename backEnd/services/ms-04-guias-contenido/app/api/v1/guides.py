@@ -9,7 +9,9 @@ from app.services.guide_service import GuideService
 router = APIRouter(prefix="/guides", tags=["Guías Ciudadanas y Trámites"])
 
 
+@router.get("", response_model=List[GuideListItem], include_in_schema=False)
 @router.get("/", response_model=List[GuideListItem])
+
 async def list_published_guides(
     db: Annotated[AsyncSession, Depends(get_db)],
     category_id: Optional[uuid.UUID] = Query(None, description="Filtrar por categoría"),

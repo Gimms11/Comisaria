@@ -11,8 +11,14 @@ from app.schemas.community_report import (
     CreateCommunityReportRequest,
     PublicCommunityReportResponse,
 )
+from packages.shared.schemas.media_validator import (
+    MediaUploadPayload,
+    PayloadTooLargeError,
+    InvalidMediaFormatError,
+)
 from app.schemas.media import MediaUploadResponse
 from app.services.community_service import CommunityService
+
 
 router = APIRouter(tags=["Reportes Ciudadanos y Comunitarios"])
 
@@ -65,13 +71,34 @@ async def upload_community_media(
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile = File(...),
 ):
-    """Sube fotografía sanitizada de la falla urbana."""
     contents = await file.read()
-    if len(contents) > 20 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Archivo supera 20MB")
+
+    # Validación Pydantic con límites de payload y comprobación de tipo real
+    try:
+        validated_payload = MediaUploadPayload.validate_file(
+            filename=file.filename or "reporte_comunitario.jpg",
+            content_type=file.content_type or "application/octet-stream",
+            file_bytes=contents,
+            max_size_bytes=20 * 1024 * 1024,
+        )
+
+    except PayloadTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        )
+    except (InvalidMediaFormatError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
 
     try:
-        media = await CommunityService.attach_media(db, public_code=public_code, file_bytes=contents)
+        media = await CommunityService.attach_media(
+            db,
+            public_code=public_code,
+            file_bytes=validated_payload.file_bytes,
+        )
         return MediaUploadResponse(
             id=media.id,
             media_type=media.media_type,
@@ -81,7 +108,15 @@ async def upload_community_media(
             status="uploaded",
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        if "no encontrado" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error procesando la imagen: {str(e)}",
+        )
+
 
 
 preview_router = APIRouter(tags=["Social Preview"])

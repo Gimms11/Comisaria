@@ -1,4 +1,5 @@
-from typing import List, Union
+from typing import List, Optional, Union
+
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +23,10 @@ class SharedSettings(BaseSettings):
 
     # Clave HMAC para hash de código de seguimiento ciudadano
     FOLLOWUP_HMAC_KEY: str = "dev-hmac-followup-key-2026"
+
+    # TikTok API Key (RapidAPI)
+    TIKTOK_API_KEY: Optional[str] = None
+
 
     # CORS
     CORS_ORIGINS: Union[str, List[str]] = ["*"]

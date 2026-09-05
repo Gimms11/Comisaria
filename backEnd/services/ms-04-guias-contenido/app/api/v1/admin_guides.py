@@ -19,6 +19,7 @@ from app.services.guide_service import GuideService
 router = APIRouter(prefix="/admin/guides", tags=["Gestión Editorial"])
 
 
+@router.get("", response_model=List[GuideListItem], include_in_schema=False, dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.MODERADOR))])
 @router.get(
     "/",
     response_model=List[GuideListItem],
@@ -56,12 +57,14 @@ async def get_guide_for_admin(
     return guide
 
 
+@router.post("", response_model=GuideDetailResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False, dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.MODERADOR))])
 @router.post(
     "/",
     response_model=GuideDetailResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.MODERADOR))],
 )
+
 async def create_guide(
     guide_in: CreateGuideRequest,
     db: Annotated[AsyncSession, Depends(get_db)],

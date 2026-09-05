@@ -38,3 +38,7 @@ Plataforma cívica comunitaria y de seguridad ciudadana para el distrito de La T
   - [`docs/Imp_Fases/fase-01/plan-ms-02-denuncias-anonimas.md`](file:///c:/Users/lordm/Desktop/Proyectos%20y%20clases/appMobile/Comisaria/docs/Imp_Fases/fase-01/plan-ms-02-denuncias-anonimas.md): MS-02 Denuncias Anónimas, Sanitización EXIF, V4 Signed URLs y bucket privado de delitos.
   - [`docs/Imp_Fases/fase-01/plan-ms-03-reportes-ciudadanos.md`](file:///c:/Users/lordm/Desktop/Proyectos%20y%20clases/appMobile/Comisaria/docs/Imp_Fases/fase-01/plan-ms-03-reportes-ciudadanos.md): MS-03 Reportes Comunitarios, Tarjetas para Redes, OpenGraph y bucket cívico.
   - [`docs/Imp_Fases/fase-01/plan-ms-04-guias-contenido.md`](file:///c:/Users/lordm/Desktop/Proyectos%20y%20clases/appMobile/Comisaria/docs/Imp_Fases/fase-01/plan-ms-04-guias-contenido.md): MS-04 Biblioteca de Guías TikTok, Google Cloud CDN, Byte-Range streaming y analítica diaria.
+
+- **[08. Despliegue en la Nube (GCP Serverless)](file:///c:/Users/lordm/Desktop/Proyectos%20y%20clases/appMobile/Comisaria/docs/07-despliegue-cloud/)**
+  - [`docs/07-despliegue-cloud/guia-despliegue-serverless-gcp.md`](file:///c:/Users/lordm/Desktop/Proyectos%20y%20clases/appMobile/Comisaria/docs/07-despliegue-cloud/guia-despliegue-serverless-gcp.md): Manual maestro de despliegue serverless ($0.00/mes), Scale-to-Zero en Cloud Run, Neon PostgreSQL, Cloud Storage (guardia de 4.99 GB), resolución de errores CORS/SSL/PIL y comandos de despliegue.
+

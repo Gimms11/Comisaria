@@ -7,6 +7,11 @@ from .enums import (
     GuideContentType,
     GuideResourceType,
 )
+from .media_validator import (
+    MediaUploadPayload,
+    PayloadTooLargeError,
+    InvalidMediaFormatError,
+)
 
 __all__ = [
     "OfficerRole",
@@ -16,4 +21,8 @@ __all__ = [
     "MediaType",
     "GuideContentType",
     "GuideResourceType",
+    "MediaUploadPayload",
+    "PayloadTooLargeError",
+    "InvalidMediaFormatError",
 ]
+

@@ -33,7 +33,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles, resolveMediaUrl } from '../../lib/utils';
+import { formatDateTime, formatTimeAgo, getPriorityStyles, getStatusStyles } from '../../lib/utils';
 
 // Custom Leaflet Icons using SVG
 const createCustomIcon = (color: string) => {
@@ -1144,7 +1144,7 @@ export const CommunityMapView: React.FC = () => {
                       className="group relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center cursor-pointer hover:border-purple-500/60 transition-all shadow-md"
                     >
                       <img
-                        src={resolveMediaUrl(url)}
+                        src={url}
                         alt={`Evidencia urbana ${idx + 1}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />

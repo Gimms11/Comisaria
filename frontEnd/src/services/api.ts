@@ -130,10 +130,11 @@ class ApiClient {
 
   // --- MS-02: DENUNCIAS ANÓNIMAS ---
   async listCrimeCategories(): Promise<Category[]> {
-    const res = await fetch(`${MS02_URL}/api/v1/categories`);
+    const res = await fetch(`${MS02_URL}/api/v1/categories/`);
     if (!res.ok) throw new Error('Error al cargar categorías de delitos');
     return res.json();
   }
+
 
   async listCrimeReports(params?: {
     status?: string;
@@ -280,10 +281,11 @@ class ApiClient {
 
   // --- MS-04: GUÍAS, TRÁMITES Y CONTENIDO ---
   async listGuideCategories(): Promise<GuideCategory[]> {
-    const res = await fetch(`${MS04_URL}/api/v1/guide-categories`);
+    const res = await fetch(`${MS04_URL}/api/v1/guide-categories/`);
     if (!res.ok) throw new Error('Error al obtener categorías de guías');
     return res.json();
   }
+
 
   async listAdminGuides(params?: {
     category_id?: string;
@@ -312,10 +314,11 @@ class ApiClient {
     transcript?: string | null;
     is_featured?: boolean;
   }): Promise<GuideItem> {
-    const res = await this.fetchWithAuth(`${MS04_URL}/api/v1/admin/guides`, {
+    const res = await this.fetchWithAuth(`${MS04_URL}/api/v1/admin/guides/`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       let msg = 'Error al crear guía cívica';

@@ -20,11 +20,13 @@ from app.services.report_service import ReportService
 router = APIRouter(prefix="/police/reports", tags=["Gestión Policial de Denuncias"])
 
 
+@router.get("", response_model=List[PoliceReportListItem], include_in_schema=False, dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.OPERADOR))])
 @router.get(
     "/",
     response_model=List[PoliceReportListItem],
     dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.OPERADOR))],
 )
+
 async def list_reports_for_police(
     db: Annotated[AsyncSession, Depends(get_db)],
     status: Optional[ReportStatus] = Query(None, description="Filtrar por estado"),

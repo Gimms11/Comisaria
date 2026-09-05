@@ -17,6 +17,7 @@ from app.schemas.officer import (
 router = APIRouter(prefix="/officers", tags=["Gestión de Efectivos Policiales"])
 
 
+@router.get("", response_model=List[OfficerResponse], include_in_schema=False, dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO))])
 @router.get(
     "/",
     response_model=List[OfficerResponse],
@@ -33,12 +34,14 @@ async def list_officers(
     return result.scalars().all()
 
 
+@router.post("", response_model=OfficerResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False, dependencies=[Depends(require_roles(OfficerRole.ADMIN))])
 @router.post(
     "/",
     response_model=OfficerResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_roles(OfficerRole.ADMIN))],
 )
+
 async def create_officer(
     officer_in: OfficerCreate,
     db: Annotated[AsyncSession, Depends(get_db)],

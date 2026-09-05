@@ -2,6 +2,9 @@ import io
 from typing import Optional, Tuple
 from PIL import Image, ImageOps
 
+# Prevención de ataques DoS por bombas de píxeles / descompresión
+Image.MAX_IMAGE_PIXELS = 50_000_000
+
 
 class MediaSanitizer:
     """
@@ -19,9 +22,11 @@ class MediaSanitizer:
         Retorna:
             (clean_image_bytes, thumbnail_bytes, mime_type, file_size)
         """
-        with Image.open(io.BytesIO(image_bytes)) as img:
-            # 1. Transponer según orientación EXIF antes de despojar metadatos
-            img = ImageOps.exif_transpose(img)
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as img:
+                # 1. Transponer según orientación EXIF antes de despojar metadatos
+                img = ImageOps.exif_transpose(img)
+
 
             # 2. Convertir a RGB si es necesario (manejar RGBA / CMYK)
             if img.mode in ("RGBA", "LA", "P"):
@@ -51,6 +56,9 @@ class MediaSanitizer:
             thumb_bytes = thumb_buffer.getvalue()
 
             return clean_bytes, thumb_bytes, mime_type, len(clean_bytes)
+        except Exception as exc:
+            raise ValueError(f"Error sanitizando imagen: {str(exc)}")
 
 
 media_sanitizer = MediaSanitizer()
+

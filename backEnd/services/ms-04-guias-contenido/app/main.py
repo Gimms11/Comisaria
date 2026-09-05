@@ -27,7 +27,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
 # Middlewares
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

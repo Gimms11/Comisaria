@@ -8,16 +8,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function resolveMediaUrl(url?: string | null): string {
-  if (!url) return '';
-  // En el navegador web del administrador (Windows), 10.0.2.2 no es enrutable.
-  // Se reemplaza por localhost:9000 y se omiten query params de firma para acceso anónimo a MinIO.
-  if (url.includes('10.0.2.2:9000')) {
-    return url.split('?')[0].replace('10.0.2.2:9000', 'localhost:9000');
-  }
-  return url;
-}
-
 export function formatTimeAgo(dateString: string): string {
   try {
     const date = parseISO(dateString);

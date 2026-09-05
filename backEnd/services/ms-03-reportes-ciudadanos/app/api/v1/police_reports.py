@@ -18,11 +18,13 @@ from typing import List as TypingList
 router = APIRouter(prefix="/police/community-reports", tags=["Gestión Policial y Serenazgo"])
 
 
+@router.get("", response_model=List[CommunityReportListItem], include_in_schema=False, dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.OPERADOR, OfficerRole.MODERADOR))])
 @router.get(
     "/",
     response_model=List[CommunityReportListItem],
     dependencies=[Depends(require_roles(OfficerRole.ADMIN, OfficerRole.COMISARIO, OfficerRole.OPERADOR, OfficerRole.MODERADOR))],
 )
+
 async def list_community_reports_for_police(
     db: Annotated[AsyncSession, Depends(get_db)],
     status: Optional[ReportStatus] = Query(None),

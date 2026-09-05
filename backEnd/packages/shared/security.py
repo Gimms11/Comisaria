@@ -3,6 +3,8 @@ import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 import jwt
+import os
+import sys
 _pwd_context = None
 
 
@@ -10,14 +12,25 @@ def get_pwd_context():
     global _pwd_context
     if _pwd_context is None:
         from passlib.context import CryptContext
-        _pwd_context = CryptContext(
-            schemes=["argon2"],
-            deprecated="auto",
-            argon2__time_cost=2,
-            argon2__memory_cost=65536,
-            argon2__parallelism=2,
-        )
+        is_test = "pytest" in sys.modules or os.getenv("TESTING", "").lower() in ("true", "1")
+        if is_test:
+            _pwd_context = CryptContext(
+                schemes=["argon2"],
+                deprecated="auto",
+                argon2__time_cost=1,
+                argon2__memory_cost=512,
+                argon2__parallelism=1,
+            )
+        else:
+            _pwd_context = CryptContext(
+                schemes=["argon2"],
+                deprecated="auto",
+                argon2__time_cost=2,
+                argon2__memory_cost=65536,
+                argon2__parallelism=2,
+            )
     return _pwd_context
+
 
 
 def hash_password(password: str) -> str:

@@ -19,16 +19,17 @@ class VideoStorageClient:
     def client(self):
         if self._s3_client is None and settings.STORAGE_ACCESS_KEY and settings.STORAGE_ENDPOINT:
             try:
+                sig = "s3" if "googleapis.com" in settings.STORAGE_ENDPOINT else "s3v4"
                 self._s3_client = boto3.client(
                     "s3",
                     endpoint_url=settings.STORAGE_ENDPOINT,
                     aws_access_key_id=settings.STORAGE_ACCESS_KEY,
                     aws_secret_access_key=settings.STORAGE_SECRET_KEY,
                     config=Config(
-                        signature_version="s3v4",
-                        connect_timeout=10,
+                        signature_version=sig,
+                        connect_timeout=5,
                         read_timeout=60,
-                        retries={"max_attempts": 1},
+                        retries={"max_attempts": 2},
                     ),
                     region_name="us-central1",
                 )

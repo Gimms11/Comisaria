@@ -1,0 +1,8 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/mitrufely/mifrufely-repo/comisaria-ms04:latest', '-f', 'services/ms-04-guias-contenido/Dockerfile', '.']
+images:
+  - 'us-central1-docker.pkg.dev/mitrufely/mifrufely-repo/comisaria-ms04:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+

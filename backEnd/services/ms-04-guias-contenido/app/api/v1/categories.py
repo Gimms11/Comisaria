@@ -9,7 +9,9 @@ from app.schemas.guide import GuideCategoryResponse
 router = APIRouter(prefix="/guide-categories", tags=["Categorías de Guías y Trámites"])
 
 
+@router.get("", response_model=List[GuideCategoryResponse], include_in_schema=False)
 @router.get("/", response_model=List[GuideCategoryResponse])
+
 async def list_guide_categories(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):

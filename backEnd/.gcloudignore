@@ -1,0 +1,15 @@
+.gcloudignore
+.git/
+.gitignore
+.venv/
+.venv/**
+__pycache__/
+**/__pycache__/**
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+**/.pytest_cache/**
+.coverage
+htmlcov/
+*.log
