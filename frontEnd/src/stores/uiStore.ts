@@ -10,7 +10,10 @@ interface UiState {
   statusFilter: ReportStatus | 'all';
   priorityFilter: ReportPriority | 'all';
   searchQuery: string;
+  isMobileMenuOpen: boolean;
   setActiveTab: (tab: ActiveTab) => void;
+  setMobileMenuOpen: (open: boolean) => void;
+  toggleMobileMenu: () => void;
   openCrimeReportModal: (id: string) => void;
   closeCrimeReportModal: () => void;
   openCommunityReportModal: (code: string) => void;
@@ -27,11 +30,14 @@ export const useUiStore = create<UiState>((set) => ({
   statusFilter: 'all',
   priorityFilter: 'all',
   searchQuery: '',
+  isMobileMenuOpen: false,
 
-  setActiveTab: (activeTab) => set({ activeTab }),
-  openCrimeReportModal: (id) => set({ selectedCrimeReportId: id }),
+  setActiveTab: (activeTab) => set({ activeTab, isMobileMenuOpen: false }),
+  setMobileMenuOpen: (isMobileMenuOpen) => set({ isMobileMenuOpen }),
+  toggleMobileMenu: () => set((state) => ({ isMobileMenuOpen: !state.isMobileMenuOpen })),
+  openCrimeReportModal: (id) => set({ selectedCrimeReportId: id, activeTab: 'crime_reports' }),
   closeCrimeReportModal: () => set({ selectedCrimeReportId: null }),
-  openCommunityReportModal: (code) => set({ selectedCommunityReportCode: code }),
+  openCommunityReportModal: (code) => set({ selectedCommunityReportCode: code, activeTab: 'community_map' }),
   closeCommunityReportModal: () => set({ selectedCommunityReportCode: null }),
   setStatusFilter: (statusFilter) => set({ statusFilter }),
   setPriorityFilter: (priorityFilter) => set({ priorityFilter }),

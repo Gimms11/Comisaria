@@ -67,7 +67,7 @@ class ApiClient {
     return response;
   }
 
-  // --- MS-01: AUTH & GATEWAY ---
+  // --- SERVICIO: AUTH & SEGURIDAD ---
   async login(credentials: { email: string; password: string }): Promise<AuthTokens> {
     const res = await fetch(`${MS01_URL}/api/v1/auth/login`, {
       method: 'POST',
@@ -128,7 +128,7 @@ class ApiClient {
     return res.json();
   }
 
-  // --- MS-02: DENUNCIAS ANÓNIMAS ---
+  // --- SERVICIO: DENUNCIAS ANÓNIMAS ---
   async listCrimeCategories(): Promise<Category[]> {
     const res = await fetch(`${MS02_URL}/api/v1/categories/`);
     if (!res.ok) throw new Error('Error al cargar categorías de delitos');
@@ -166,8 +166,25 @@ class ApiClient {
     };
   }
 
-  async getCrimeReportDetail(id: string): Promise<CrimeReportDetail> {
-    const res = await this.fetchWithAuth(`${MS02_URL}/api/v1/police/reports/${id}`);
+  async getCrimeReportDetail(idOrCode: string): Promise<CrimeReportDetail> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
+    let targetId = idOrCode;
+
+    if (!isUuid) {
+      try {
+        const list = await this.listCrimeReports({ limit: 200 });
+        const matched = list.items.find(
+          (r) => r.public_code.toLowerCase() === idOrCode.toLowerCase()
+        );
+        if (matched) {
+          targetId = matched.id;
+        }
+      } catch (e) {
+        console.warn('No se pudo resolver public_code a UUID en getCrimeReportDetail:', e);
+      }
+    }
+
+    const res = await this.fetchWithAuth(`${MS02_URL}/api/v1/police/reports/${targetId}`);
     if (!res.ok) throw new Error('Error al obtener detalle de denuncia');
     return res.json();
   }
@@ -193,7 +210,7 @@ class ApiClient {
     return res.json();
   }
 
-  // --- MS-03: REPORTES CIUDADANOS / COMUNITARIOS ---
+  // --- SERVICIO: REPORTES CIUDADANOS / COMUNITARIOS ---
   async listCommunityCategories(): Promise<Category[]> {
     const res = await fetch(`${MS03_URL}/api/v1/categories/`);
     if (!res.ok) throw new Error('Error al obtener categorías comunitarias');
@@ -279,7 +296,7 @@ class ApiClient {
     return res.json();
   }
 
-  // --- MS-04: GUÍAS, TRÁMITES Y CONTENIDO ---
+  // --- SERVICIO: GUÍAS, TRÁMITES Y CONTENIDO ---
   async listGuideCategories(): Promise<GuideCategory[]> {
     const res = await fetch(`${MS04_URL}/api/v1/guide-categories/`);
     if (!res.ok) throw new Error('Error al obtener categorías de guías');

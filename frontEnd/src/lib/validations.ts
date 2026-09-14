@@ -18,7 +18,7 @@ export const loginSchema = z.object({
 export type LoginFormData = z.infer<typeof loginSchema>;
 
 // ==========================================
-// 2. GESTIÓN DE OFICIALES (MS-01)
+// 2. GESTIÓN DE OFICIALES
 // ==========================================
 export const officerCreateSchema = z.object({
   full_name: z
@@ -46,7 +46,7 @@ export const officerCreateSchema = z.object({
 export type OfficerCreateFormData = z.infer<typeof officerCreateSchema>;
 
 // ==========================================
-// 3. GUÍAS CÍVICAS (MS-04)
+// 3. GUÍAS CÍVICAS
 // ==========================================
 export const guideCreateSchema = z.object({
   title: z
@@ -60,7 +60,7 @@ export const guideCreateSchema = z.object({
     .min(10, 'El resumen y pasos clave deben tener al menos 10 caracteres')
     .max(3000, 'El contenido no puede superar los 3000 caracteres'),
   category_id: z.string().optional(),
-  content_type: z.enum(['video', 'articulo', 'infografia', 'mixto']).default('video'),
+  content_type: z.enum(['video', 'articulo', 'infografia', 'mixto']),
   main_video_url: z
     .string()
     .trim()
@@ -71,7 +71,7 @@ export const guideCreateSchema = z.object({
     ),
   thumbnail_url: z.string().optional(),
   transcript: z.string().optional(),
-  is_featured: z.boolean().default(false),
+  is_featured: z.boolean(),
 });
 
 export type GuideCreateFormData = z.infer<typeof guideCreateSchema>;

@@ -7,6 +7,9 @@ import {
   LogOut,
   Bell,
   ShieldCheck,
+  Menu,
+  X,
+  Flame,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useWebSocketStore } from '../../stores/websocketStore';
@@ -17,9 +20,16 @@ import { formatTimeAgo } from '../../lib/utils';
 
 export const Header: React.FC = () => {
   const { officer, logout } = useAuthStore();
-  const { status, soundEnabled, toggleSound, alerts, unreadEmergencyCount, markAllAsRead } =
-    useWebSocketStore();
-  const { openCrimeReportModal } = useUiStore();
+  const {
+    status,
+    soundEnabled,
+    toggleSound,
+    alerts,
+    unreadEmergencyCount,
+    markAllAsRead,
+    simulateIncomingAlert,
+  } = useWebSocketStore();
+  const { openCrimeReportModal, isMobileMenuOpen, toggleMobileMenu } = useUiStore();
   const [showAlertMenu, setShowAlertMenu] = useState(false);
 
   const getRoleBadgeVariant = (role?: string) => {
@@ -37,23 +47,33 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="shrink-0 z-40 w-full glass-panel border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 lg:px-8 py-3">
-      <div className="flex items-center justify-between gap-4">
-        {/* Left: Badge & Live Hub Indicator */}
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center shadow-lg shadow-sky-500/20 border border-sky-400/30">
-            <ShieldAlert className="w-6 h-6 text-white" />
+    <header className="shrink-0 z-40 w-full glass-panel border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md px-3 sm:px-4 lg:px-8 py-2.5 sm:py-3">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
+        {/* Left: Hamburger button (lg:hidden) + Logo & Station Title */}
+        <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMobileMenu}
+            aria-label={isMobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            className="lg:hidden shrink-0 text-slate-300 hover:text-white hover:bg-slate-800/80 h-9 w-9"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </Button>
+
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center shadow-lg shadow-sky-500/20 border border-sky-400/30 shrink-0">
+            <ShieldAlert className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-extrabold text-white tracking-tight font-heading">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="text-xs sm:text-base font-extrabold text-white tracking-tight font-heading truncate">
                 COMISARÍA PNP LA TINGUIÑA
               </h1>
-              <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-800/50">
+              <span className="hidden md:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-800/50 shrink-0">
                 División Policial Ica
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-mono">Centro de Comando & Despacho Digital</p>
+            <p className="text-[10px] sm:text-xs text-slate-400 font-mono truncate hidden sm:block">Centro de Comando & Despacho Digital</p>
           </div>
         </div>
 
@@ -181,12 +201,35 @@ export const Header: React.FC = () => {
                     ))
                   )}
                 </div>
+
+                {/* Tactical Dispatch Simulator for testing live alert & red flash */}
+                <div className="pt-2.5 mt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">Simulador Guardia PNP</span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => {
+                      simulateIncomingAlert('crime', true);
+                      setShowAlertMenu(false);
+                    }}
+                    className="text-[11px] py-1 px-2.5 gap-1.5 shadow-md shadow-red-600/20"
+                  >
+                    <Flame className="w-3.5 h-3.5" /> Simular Denuncia SOS
+                  </Button>
+                </div>
               </div>
             )}
           </div>
 
           {/* Officer Profile & Logout */}
-          <div className="flex items-center gap-3 pl-2 sm:pl-3 border-l border-slate-800">
+          <div className="flex items-center gap-1.5 sm:gap-3 pl-1.5 sm:pl-3 border-l border-slate-800">
+            {/* Mobile mini badge */}
+            <div className="sm:hidden">
+              <Badge variant={getRoleBadgeVariant(officer?.role)} className="text-[9px] py-0 px-1 font-mono">
+                {officer?.role ? officer.role.slice(0, 3).toUpperCase() : 'OP'}
+              </Badge>
+            </div>
+
             <div className="text-right hidden sm:block">
               <div className="flex items-center justify-end gap-1.5">
                 <span className="text-xs font-bold text-slate-200 font-heading">

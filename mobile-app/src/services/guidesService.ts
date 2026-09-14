@@ -1,6 +1,7 @@
 import { API_CONFIG } from '@/config/api.config';
 import { apiFetch } from './apiClient';
 import { GuideCategory, GuideItem } from '@/types';
+import { logger } from '@/utils/logger';
 
 const DEFAULT_GUIDE_CATEGORIES: GuideCategory[] = [
   { id: 'all', name: 'Todas', slug: 'todas', icon_name: 'sparkles', sort_order: 0 },
@@ -19,6 +20,8 @@ const DEFAULT_GUIDES: GuideItem[] = [
     content_type: 'video',
     duration_seconds: 45,
     is_featured: true,
+    thumbnail_url: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800',
+    main_video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     category: {
       id: 'cat-gui-01',
       name: 'Denuncias y Seguridad',
@@ -41,6 +44,8 @@ const DEFAULT_GUIDES: GuideItem[] = [
     content_type: 'video',
     duration_seconds: 35,
     is_featured: true,
+    thumbnail_url: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800',
+    main_video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
     category: {
       id: 'cat-gui-02',
       name: 'Pérdida de Documentos',
@@ -63,26 +68,31 @@ export const GuidesService = {
         `${API_CONFIG.GUIDES_BASE_URL}/guide-categories/`
       );
       if (Array.isArray(data) && data.length > 0) {
+        logger.info('GUIDES', `Categorías cargadas desde el servidor (${data.length})`);
         return [{ id: 'all', name: 'Todas', slug: 'todas', icon_name: 'sparkles', sort_order: 0 }, ...data];
       }
       return DEFAULT_GUIDE_CATEGORIES;
-    } catch {
+    } catch (e: any) {
+      logger.warn('GUIDES', `Usando categorías por defecto: ${e?.message || e}`);
       return DEFAULT_GUIDE_CATEGORIES;
     }
   },
 
   async listGuides(categoryId?: string, search?: string): Promise<GuideItem[]> {
     try {
-      const url = new URL(`${API_CONFIG.GUIDES_BASE_URL}/guides/`);
+      const params = new URLSearchParams();
       if (categoryId && categoryId !== 'all' && categoryId !== 'todas') {
-        url.searchParams.append('category_id', categoryId);
+        params.append('category_id', categoryId);
       }
       if (search && search.trim()) {
-        url.searchParams.append('search', search.trim());
+        params.append('search', search.trim());
       }
+      const qs = params.toString();
+      const endpoint = `${API_CONFIG.GUIDES_BASE_URL}/guides/${qs ? `?${qs}` : ''}`;
 
-      const data = await apiFetch<any[]>(url.toString());
+      const data = await apiFetch<any[]>(endpoint);
       if (Array.isArray(data) && data.length > 0) {
+        logger.info('GUIDES', `Guías cívicas cargadas desde el servidor (${data.length})`);
         return data.map((item) => ({
           ...item,
           category: item.category || {
@@ -93,11 +103,12 @@ export const GuidesService = {
           },
         }));
       }
-    } catch {
-      // Fallback below
+      logger.info('GUIDES', 'El servidor no tiene guías registradas. Usando catálogo preventivo local.');
+    } catch (e: any) {
+      logger.warn('GUIDES', `Error al obtener guías de red, activando catálogo offline: ${e?.message || e}`);
     }
 
-    // Apply local filter on default guides if backend is unavailable
+    // Apply local filter on default guides if backend is unavailable or empty
     return DEFAULT_GUIDES.filter((g) => {
       if (categoryId && categoryId !== 'all' && categoryId !== 'todas') {
         const matchId = g.category?.id === categoryId;

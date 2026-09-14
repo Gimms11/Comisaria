@@ -9,16 +9,23 @@ interface WebSocketState {
   alerts: LiveAlertEvent[];
   unreadEmergencyCount: number;
   latestAlert: LiveAlertEvent | null;
+  isFlashingRed: boolean;
+  activeNotification: LiveAlertEvent | null;
   toggleSound: () => void;
   connect: () => Promise<void>;
   disconnect: () => void;
   markAllAsRead: () => void;
   dismissAlert: (id: string) => void;
+  dismissNotification: () => void;
+  triggerAlertFlash: (alert: LiveAlertEvent) => void;
+  simulateIncomingAlert: (type?: 'crime' | 'community', isEmergency?: boolean) => void;
 }
 
 let socket: WebSocket | null = null;
 let pingInterval: any = null;
 let reconnectTimer: any = null;
+let flashTimer: any = null;
+let toastTimer: any = null;
 let isConnecting = false;
 let connectAbortController: AbortController | null = null;
 const recentAlerts = new Map<string, number>();
@@ -29,6 +36,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   alerts: [],
   unreadEmergencyCount: 0,
   latestAlert: null,
+  isFlashingRed: false,
+  activeNotification: null,
 
   toggleSound: () => {
     set((state) => ({ soundEnabled: !state.soundEnabled }));
@@ -57,7 +66,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     set({ status: 'CONNECTING' });
 
     try {
-      // 1. Obtener ticket de un solo uso desde MS-01
+      // 1. Obtener ticket de un solo uso de autenticación
       const { ticket } = await api.getWsTicket(abortController.signal);
       if (abortController.signal.aborted) {
         return;
@@ -142,6 +151,52 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
             read: false,
           };
 
+          // Si es un cambio de estado en el progreso de una denuncia/reporte:
+          // Actualizar estado reactivamente SIN lanzar pantallazo rojo ni sirena
+          if (eventType === 'STATUS_CHANGED') {
+            const newStatus =
+              payload.new_status ||
+              alertEvent.extra_data?.new_status ||
+              payload.status;
+            const isResolved =
+              newStatus === 'resuelto' ||
+              newStatus === 'archivado' ||
+              newStatus === 'rechazado';
+
+            set((state) => {
+              const updatedAlerts = state.alerts.map((a) => {
+                if (a.public_code === publicCode) {
+                  return {
+                    ...a,
+                    extra_data: {
+                      ...a.extra_data,
+                      status: newStatus,
+                      new_status: newStatus,
+                    },
+                  };
+                }
+                return a;
+              });
+
+              return {
+                alerts: updatedAlerts,
+                latestAlert: alertEvent,
+                unreadEmergencyCount:
+                  isResolved && state.unreadEmergencyCount > 0
+                    ? state.unreadEmergencyCount - 1
+                    : state.unreadEmergencyCount,
+              };
+            });
+
+            // Si había notificación emergente de este reporte y se resolvió, descartarla
+            if (get().activeNotification?.public_code === publicCode && isResolved) {
+              get().dismissNotification();
+            }
+
+            return;
+          }
+
+          // Solo para NUEVAS denuncias/reportes (NEW_CRIME_REPORT / NEW_COMMUNITY_REPORT):
           // Reproducir sonido si está habilitado
           if (get().soundEnabled) {
             if (alertEvent.priority === 'urgente' || alertEvent.priority === 'alta') {
@@ -165,6 +220,9 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
                 : state.unreadEmergencyCount,
             };
           });
+
+          // Disparar flash de pantalla rojo oscuro y notificación emergente solo al crearse la denuncia
+          get().triggerAlertFlash(alertEvent);
         } catch (err) {
           console.error('[WebSocket Hub] Error procesando payload:', err);
         }
@@ -228,5 +286,99 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     set((state) => ({
       alerts: state.alerts.filter((a) => a.id !== id),
     }));
+  },
+
+  dismissNotification: () => {
+    if (toastTimer) clearTimeout(toastTimer);
+    set({ activeNotification: null });
+  },
+
+  triggerAlertFlash: (alertEvent: LiveAlertEvent) => {
+    // Salvaguarda: nunca disparar flash para cambios de estado, solo para nuevas denuncias
+    if (alertEvent.event_type === 'STATUS_CHANGED') {
+      return;
+    }
+
+    if (flashTimer) clearTimeout(flashTimer);
+    if (toastTimer) clearTimeout(toastTimer);
+
+    // Audio de alerta táctica si está habilitado
+    if (get().soundEnabled) {
+      if (alertEvent.priority === 'urgente' || alertEvent.priority === 'alta') {
+        audioAlert.playEmergencySiren();
+      } else {
+        audioAlert.playPing();
+      }
+    }
+
+    set({
+      isFlashingRed: true,
+      activeNotification: alertEvent,
+    });
+
+    flashTimer = setTimeout(() => {
+      set({ isFlashingRed: false });
+    }, 1200);
+
+    toastTimer = setTimeout(() => {
+      set({ activeNotification: null });
+    }, 7000);
+  },
+
+  simulateIncomingAlert: async (type = 'crime', isEmergency = true) => {
+    let publicCode = `LT-2026-00${Math.floor(1000 + Math.random() * 9000)}`;
+    let reportId: string | undefined = undefined;
+    let categoryName =
+      type === 'crime'
+        ? 'Robo a mano armada en vía pública'
+        : 'Corte de alumbrado y poste inclinado';
+
+    // Vincular a un reporte real existente de la BD para que "Intervenir" cargue el detalle real
+    try {
+      if (type === 'crime') {
+        const res = await api.listCrimeReports({ limit: 10 });
+        if (res.items && res.items.length > 0) {
+          const randomIndex = Math.floor(Math.random() * res.items.length);
+          const chosen = res.items[randomIndex];
+          publicCode = chosen.public_code;
+          reportId = chosen.id;
+          categoryName = chosen.category_name;
+        }
+      } else {
+        const res = await api.listCommunityReports({ limit: 10 });
+        if (res.items && res.items.length > 0) {
+          const randomIndex = Math.floor(Math.random() * res.items.length);
+          const chosen = res.items[randomIndex];
+          publicCode = chosen.public_code;
+          reportId = chosen.id;
+          categoryName = chosen.category_name;
+        }
+      }
+    } catch {
+      // Modo offline o fallback
+    }
+
+    const alertEvent: LiveAlertEvent = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      event_type: type === 'crime' ? 'NEW_CRIME_REPORT' : 'NEW_COMMUNITY_REPORT',
+      public_code: publicCode,
+      priority: isEmergency ? 'urgente' : 'alta',
+      category_name: categoryName,
+      extra_data: {
+        report_id: reportId || publicCode,
+      },
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+
+    set((state) => ({
+      alerts: [alertEvent, ...state.alerts.slice(0, 49)],
+      latestAlert: alertEvent,
+      unreadEmergencyCount: isEmergency
+        ? state.unreadEmergencyCount + 1
+        : state.unreadEmergencyCount,
+    }));
+
+    get().triggerAlertFlash(alertEvent);
   },
 }));

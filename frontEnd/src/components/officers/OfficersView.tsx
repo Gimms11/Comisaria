@@ -1,16 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { Users, UserPlus, ShieldCheck, Mail, Lock, Shield } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Users, UserPlus, Shield } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { Officer } from '../../types';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
-import { Modal } from '../ui/Modal';
-import { formatDateTime } from '../../lib/utils';
-import { officerCreateSchema, formatZodErrors } from '../../lib/validations';
+import { OfficerCreateFormData } from '../../lib/validations';
+import { OfficerTable } from './OfficerTable';
+import { OfficerCreateModal } from './OfficerCreateModal';
 
 export const OfficersView: React.FC = () => {
   const { officer: currentOfficer } = useAuthStore();
@@ -19,17 +15,8 @@ export const OfficersView: React.FC = () => {
   const [officers, setOfficers] = useState<Officer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const [form, setForm] = useState({
-    full_name: '',
-    email: '',
-    password: '',
-    role: 'operador',
-  });
-
-  const fetchOfficers = async () => {
+  const fetchOfficers = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await api.listOfficers();
@@ -39,40 +26,26 @@ export const OfficersView: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOfficers();
-  }, []);
+  }, [fetchOfficers]);
 
-  const handleCreateOfficer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormErrors({});
-
-    const result = officerCreateSchema.safeParse(form);
-    if (!result.success) {
-      setFormErrors(formatZodErrors(result.error));
-      return;
-    }
-
+  const handleCreateOfficer = async (data: OfficerCreateFormData) => {
     try {
-      setIsSubmitting(true);
-      await api.createOfficer(result.data);
-      setIsModalOpen(false);
-      setForm({ full_name: '', email: '', password: '', role: 'operador' });
-      setFormErrors({});
-      fetchOfficers();
+      await api.createOfficer(data);
+      await fetchOfficers();
     } catch (err: any) {
       alert(err.message || 'Error al registrar oficial');
-    } finally {
-      setIsSubmitting(false);
+      throw err;
     }
   };
 
   const handleToggleActive = async (officer: Officer) => {
     try {
       await api.updateOfficer(officer.id, { is_active: !officer.is_active });
-      fetchOfficers();
+      await fetchOfficers();
     } catch (err: any) {
       alert(err.message || 'Error al actualizar estado del oficial');
     }
@@ -81,27 +54,26 @@ export const OfficersView: React.FC = () => {
   return (
     <div className="space-y-6 text-left">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
-            <Users className="w-7 h-7 text-sky-400" />
-            Dotación y Personal Policial (MS-01)
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
+            <div className="p-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 shrink-0 flex items-center justify-center">
+              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400 shrink-0" />
+            </div>
+            <span>Dotación & Personal Policial</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Gestión de cuentas institucionales, control de acceso basado en roles (RBAC) y claves de seguridad.
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed max-w-2xl">
+            Gestión de cuentas institucionales, control de roles (RBAC) y credenciales policiales.
           </p>
         </div>
         {isAdmin ? (
           <Button
             variant="primary"
             size="sm"
-            onClick={() => {
-              setFormErrors({});
-              setIsModalOpen(true);
-            }}
+            onClick={() => setIsModalOpen(true)}
             className="gap-2 whitespace-nowrap shrink-0"
           >
-            <UserPlus className="w-4 h-4" /> Registrar Oficial
+            <UserPlus className="w-4 h-4 shrink-0" /> Registrar Oficial
           </Button>
         ) : (
           <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-amber-400 font-mono flex items-center gap-2 whitespace-nowrap shrink-0">
@@ -111,161 +83,20 @@ export const OfficersView: React.FC = () => {
         )}
       </div>
 
-      {/* Officers Table */}
-      <Card className="bg-slate-900/90 border-slate-800 p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-950/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-              <tr>
-                <th className="py-3.5 px-4 whitespace-nowrap">Oficial</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Correo Institucional</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Rol Asignado</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Estado Cuenta</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Fecha Registro</th>
-                <th className="py-3.5 px-4 text-right whitespace-nowrap">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    Cargando dotación policial...
-                  </td>
-                </tr>
-              ) : officers.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    No se encontraron oficiales registrados.
-                  </td>
-                </tr>
-              ) : (
-                officers.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2 whitespace-nowrap">
-                      <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
-                      {o.full_name}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-300 font-mono text-xs whitespace-nowrap">{o.email}</td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <Badge
-                        variant={
-                          o.role === 'admin'
-                            ? 'urgent'
-                            : o.role === 'comisario'
-                            ? 'warning'
-                            : 'info'
-                        }
-                        className="whitespace-nowrap shrink-0"
-                      >
-                        {o.role.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-semibold border whitespace-nowrap shrink-0 ${
-                          o.is_active
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                            : 'bg-red-500/10 text-red-400 border-red-500/30'
-                        }`}
-                      >
-                        {o.is_active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-400 font-mono whitespace-nowrap">
-                      {o.created_at ? formatDateTime(o.created_at) : 'Guardia'}
-                    </td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      {isAdmin ? (
-                        <Button
-                          variant={o.is_active ? 'outline' : 'success'}
-                          size="sm"
-                          className="text-xs whitespace-nowrap"
-                          onClick={() => handleToggleActive(o)}
-                        >
-                          {o.is_active ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-slate-500 font-mono whitespace-nowrap">Solo Admin</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Officers Table / Card List */}
+      <OfficerTable
+        officers={officers}
+        isLoading={isLoading}
+        isAdmin={isAdmin}
+        onToggleActive={handleToggleActive}
+      />
 
       {/* Register Officer Modal */}
-      <Modal
+      <OfficerCreateModal
         isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setFormErrors({});
-        }}
-        title="Registrar Nuevo Efectivo Policial"
-        subtitle="Asigne credenciales y privilegios institucionales de acceso"
-        maxWidth="md"
-      >
-        <form onSubmit={handleCreateOfficer} className="space-y-4 text-left" noValidate>
-          <Input
-            label="Grado y Nombre Completo"
-            placeholder="Ej: Mayor PNP Carlos Mendoza"
-            value={form.full_name}
-            error={formErrors.full_name}
-            onChange={(e) => {
-              setForm((prev) => ({ ...prev, full_name: e.target.value }));
-              if (formErrors.full_name) setFormErrors((prev) => ({ ...prev, full_name: '' }));
-            }}
-          />
-
-          <Input
-            label="Correo Electrónico Institucional"
-            type="email"
-            placeholder="carlos.mendoza@policia.gob.pe"
-            value={form.email}
-            error={formErrors.email}
-            onChange={(e) => {
-              setForm((prev) => ({ ...prev, email: e.target.value }));
-              if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: '' }));
-            }}
-            leftIcon={<Mail className="w-4 h-4 text-slate-400" />}
-          />
-
-          <Input
-            label="Contraseña de Acceso (Mínimo 8 car., Mayús., Minús. y Número)"
-            type="password"
-            placeholder="••••••••••••"
-            value={form.password}
-            error={formErrors.password}
-            onChange={(e) => {
-              setForm((prev) => ({ ...prev, password: e.target.value }));
-              if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
-            }}
-            leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
-          />
-
-          <Select
-            label="Nivel de Privilegio (Rol RBAC)"
-            value={form.role}
-            error={formErrors.role}
-            onChange={(e) => {
-              setForm((prev) => ({ ...prev, role: e.target.value }));
-              if (formErrors.role) setFormErrors((prev) => ({ ...prev, role: '' }));
-            }}
-            options={[
-              { value: 'operador', label: 'Operador (Revisión y Despacho)' },
-              { value: 'comisario', label: 'Comisario (Supervisión y Estadísticas)' },
-              { value: 'admin', label: 'Administrador General del Sistema' },
-              { value: 'moderador', label: 'Moderador Cívico' },
-            ]}
-          />
-
-          <Button type="submit" variant="primary" size="sm" className="w-full" isLoading={isSubmitting}>
-            Confirmar Registro Policial
-          </Button>
-        </form>
-      </Modal>
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleCreateOfficer}
+      />
     </div>
   );
 };

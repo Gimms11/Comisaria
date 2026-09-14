@@ -14,28 +14,25 @@ const getLocalHost = () => {
 
 const HOST = getLocalHost();
 
+const CLOUD_MS01_URL = 'https://comisaria-ms01-auth-264198079598.us-central1.run.app';
+const CLOUD_MS02_URL = 'https://comisaria-ms02-denuncias-264198079598.us-central1.run.app';
+const CLOUD_MS03_URL = 'https://comisaria-ms03-reportes-264198079598.us-central1.run.app';
+const CLOUD_MS04_URL = 'https://comisaria-ms04-guias-264198079598.us-central1.run.app';
+
 export const API_CONFIG = {
   // MS-01: Gateway & Auth (Policía)
-  GATEWAY_BASE_URL: process.env.EXPO_PUBLIC_MS01_URL
-    ? `${process.env.EXPO_PUBLIC_MS01_URL}/api/v1`
-    : `http://${HOST}:8001/api/v1`,
+  GATEWAY_BASE_URL: `${process.env.EXPO_PUBLIC_MS01_URL || CLOUD_MS01_URL}/api/v1`,
 
   // MS-02: Denuncias Anónimas
-  CRIME_REPORTS_BASE_URL: process.env.EXPO_PUBLIC_MS02_URL
-    ? `${process.env.EXPO_PUBLIC_MS02_URL}/api/v1`
-    : `http://${HOST}:8002/api/v1`,
+  CRIME_REPORTS_BASE_URL: `${process.env.EXPO_PUBLIC_MS02_URL || CLOUD_MS02_URL}/api/v1`,
 
   // MS-03: Reportes Comunitarios
-  COMMUNITY_REPORTS_BASE_URL: process.env.EXPO_PUBLIC_MS03_URL
-    ? `${process.env.EXPO_PUBLIC_MS03_URL}/api/v1`
-    : `http://${HOST}:8003/api/v1`,
+  COMMUNITY_REPORTS_BASE_URL: `${process.env.EXPO_PUBLIC_MS03_URL || CLOUD_MS03_URL}/api/v1`,
 
   // MS-04: Guías y Biblioteca TikTok
-  GUIDES_BASE_URL: process.env.EXPO_PUBLIC_MS04_URL
-    ? `${process.env.EXPO_PUBLIC_MS04_URL}/api/v1`
-    : `http://${HOST}:8004/api/v1`,
+  GUIDES_BASE_URL: `${process.env.EXPO_PUBLIC_MS04_URL || CLOUD_MS04_URL}/api/v1`,
 
-  TIMEOUT_MS: 15000,
+  TIMEOUT_MS: 30000,
 };
 
 export const EMERGENCY_NUMBERS = [

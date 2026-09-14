@@ -18,6 +18,7 @@ import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { Category, CommunityReportItem } from '@/types';
 import { CommunityReportsService } from '@/services/communityReportsService';
+import { logger } from '@/utils/logger';
 
 export default function CommunityFeedScreen() {
   const theme = useTheme();
@@ -32,14 +33,16 @@ export default function CommunityFeedScreen() {
 
   const loadData = async () => {
     try {
+      logger.info('COMMUNITY', 'Cargando categorías e incidencias vecinales...');
       const [cats, items] = await Promise.all([
         CommunityReportsService.getCategories(),
         CommunityReportsService.listCommunityReports(),
       ]);
       setCategories(cats);
       setReports(items);
-    } catch (e) {
-      console.warn('Error loading community reports:', e);
+      logger.info('COMMUNITY', `Reportes comunitarios cargados: ${items.length} items`);
+    } catch (e: any) {
+      logger.error('COMMUNITY', 'Error al cargar reportes comunitarios:', e);
     } finally {
       setLoading(false);
     }

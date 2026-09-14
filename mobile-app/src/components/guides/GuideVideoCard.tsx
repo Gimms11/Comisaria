@@ -19,6 +19,7 @@ import { BorderRadius, Spacing } from '@/constants/theme';
 import { GuideItem } from '@/types';
 import { GuidesService } from '@/services/guidesService';
 import { GuideStepsSheet } from './GuideStepsSheet';
+import { logger } from '@/utils/logger';
 
 interface GuideVideoCardProps {
   guide: GuideItem;
@@ -49,13 +50,18 @@ export const GuideVideoCard: React.FC<GuideVideoCardProps> = ({
   const [durationSeconds, setDurationSeconds] = useState(guide.duration_seconds || 45);
   const [progressBarWidth, setProgressBarWidth] = useState(300);
 
-  // Initialize official Expo Video player
-  const videoSource = guide.main_video_url || '';
+  // Initialize official Expo Video player safely
+  const videoSource = guide.main_video_url ? guide.main_video_url : null;
   const player = useVideoPlayer(videoSource, (p) => {
-    p.loop = true;
-    p.muted = isMuted;
-    if (isActive && isPlaying && renderMode === 'active') {
-      p.play();
+    if (!videoSource) return;
+    try {
+      p.loop = true;
+      p.muted = isMuted;
+      if (isActive && isPlaying && renderMode === 'active') {
+        p.play();
+      }
+    } catch (err) {
+      logger.warn('GUIDES', `Error al inicializar reproductor: ${err}`);
     }
   });
 
@@ -100,13 +106,17 @@ export const GuideVideoCard: React.FC<GuideVideoCardProps> = ({
 
   // Sync active play/pause with focus/active window
   useEffect(() => {
-    if (!player) return;
-    if (isActive && isPlaying && renderMode === 'active') {
-      player.play();
-    } else {
-      player.pause();
+    if (!player || !guide.main_video_url) return;
+    try {
+      if (isActive && isPlaying && renderMode === 'active') {
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch (err) {
+      logger.warn('GUIDES', `Error al alternar reproducción: ${err}`);
     }
-  }, [isActive, renderMode, isPlaying, player]);
+  }, [isActive, renderMode, isPlaying, player, guide.main_video_url]);
 
   // Sync mute state
   useEffect(() => {
@@ -266,7 +276,7 @@ export const GuideVideoCard: React.FC<GuideVideoCardProps> = ({
             />
 
             {/* Native Video Player only mounted when within the 3-slot active/preload window */}
-            {shouldMountVideo && player && (
+            {shouldMountVideo && player && videoSource && (
               <View style={styles.videoPlayerBox}>
                 <VideoView
                   style={styles.fullVideoElement}

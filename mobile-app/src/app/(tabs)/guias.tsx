@@ -18,6 +18,7 @@ import { GuideVideoCard } from '@/components/guides/GuideVideoCard';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { GuideCategory, GuideItem } from '@/types';
 import { GuidesService } from '@/services/guidesService';
+import { logger } from '@/utils/logger';
 
 export default function GuidesScreen() {
   const [loading, setLoading] = useState(true);
@@ -50,12 +51,14 @@ export default function GuidesScreen() {
 
   const loadData = async (catId?: string) => {
     try {
+      logger.info('GUIDES', `Cargando guías (categoría: ${catId || 'all'})...`);
       const [cats, items] = await Promise.all([
         GuidesService.getCategories(),
         GuidesService.listGuides(catId === 'all' ? undefined : catId),
       ]);
       setCategories(cats);
       setGuides(items);
+      logger.info('GUIDES', `Guías listas para mostrar: ${items.length} items.`);
 
       // Pre-warm thumbnail images into memory/disk cache for zero-lag swipe
       if (items.length > 0) {
@@ -67,8 +70,8 @@ export default function GuidesScreen() {
           Image.prefetch(url).catch(() => {});
         });
       }
-    } catch (e) {
-      console.warn('Error loading guides:', e);
+    } catch (e: any) {
+      logger.error('GUIDES', 'Error al cargar guías:', e);
     } finally {
       setLoading(false);
     }

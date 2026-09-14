@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { API_CONFIG } from '@/config/api.config';
+import { logger } from '@/utils/logger';
 
 export class ApiError extends Error {
   status: number;
@@ -15,14 +16,17 @@ export class ApiError extends Error {
 
 interface FetchOptions extends RequestInit {
   timeoutMs?: number;
+  retries?: number;
 }
 
 export async function apiFetch<T>(
   url: string,
   options: FetchOptions = {}
 ): Promise<T> {
-  const { timeoutMs = API_CONFIG.TIMEOUT_MS, ...fetchOptions } = options;
+  const method = options.method || 'GET';
+  const { timeoutMs = API_CONFIG.TIMEOUT_MS, retries = method === 'GET' ? 1 : 0, ...fetchOptions } = options;
 
+  const tracer = logger.traceRequest(method, url);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -41,6 +45,7 @@ export async function apiFetch<T>(
 
     const response = await fetch(url, {
       ...fetchOptions,
+      method,
       headers,
       signal: controller.signal,
     });
@@ -61,15 +66,33 @@ export async function apiFetch<T>(
           errorMessage = data.message;
         }
       }
+      tracer.fail(errorMessage);
       throw new ApiError(errorMessage, response.status, data);
     }
 
+    tracer.done(response.status, typeof data === 'object' ? JSON.stringify(data).length : undefined);
     return data as T;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
+
+    const isCanceledOrTimeout =
+      error.name === 'AbortError' ||
+      (typeof error.message === 'string' &&
+        (error.message.toLowerCase().includes('cancel') ||
+          error.message.toLowerCase().includes('timeout') ||
+          error.message.toLowerCase().includes('aborted')));
+
+    // Reintento automático para peticiones GET cuando el microservicio está despertando (Cold Start)
+    if (isCanceledOrTimeout && retries > 0) {
+      logger.warn('API', `⏳ Microservicio posiblemente despertando en frío. Reintentando ${method} ${url}...`);
+      return apiFetch<T>(url, { ...options, retries: retries - 1, timeoutMs: 35000 });
+    }
+
+    tracer.fail(error);
+
+    if (isCanceledOrTimeout) {
       throw new ApiError(
-        'Tiempo de espera agotado al conectar con el servidor',
+        'Tiempo de espera agotado al conectar con el servidor (el servicio se encuentra iniciando). Por favor intenta nuevamente.',
         408
       );
     }
