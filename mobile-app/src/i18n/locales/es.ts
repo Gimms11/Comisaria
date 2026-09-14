@@ -1,0 +1,80 @@
+export const es = {
+  common: {
+    appName: 'Comisaría La Tinguiña',
+    appSubtitle: 'Atención y Seguridad Ciudadana',
+    sos: 'SOS 105',
+    back: 'Volver',
+    cancel: 'Cancelar',
+    accept: 'Aceptar',
+    loading: 'Cargando...',
+    error: 'Error',
+    save: 'Guardar',
+    share: 'Compartir',
+    copy: 'Copiar',
+    copied: '¡Copiado!',
+  },
+  tabs: {
+    home: 'Inicio',
+    community: 'Comunidad',
+    guides: 'Guías TikTok',
+    tracking: 'Seguimiento',
+  },
+  home: {
+    emergencyLine: 'LÍNEA DE EMERGENCIA 24/7',
+    sosPnp: '105 PNP',
+    sosComisaria: '056-256114',
+    anonymousReportCard: 'DENUNCIA ANÓNIMA',
+    zeroTrace: '100% Sin Datos Personales',
+    reportButton: 'Reportar Hecho Delictivo',
+    communityReports: 'Reportes Vecinales',
+    quickGuides: 'Guías Cívicas Rápidas',
+  },
+  crime: {
+    title: 'Denuncia Anónima',
+    subtitle: '100% Protegido • Zero Datos',
+    stealthExit: 'Disimular / Salir',
+    step1: '1. ¿Qué pasa?',
+    step2: '2. ¿Dónde?',
+    step3: '3. Enviar',
+    protectionTitle: 'PROTECCIÓN TOTAL CONTRA REPRESALIAS',
+    protectionDesc: 'No te pedimos DNI, nombres ni guardamos tu número. Solo los hechos.',
+    selectCrime: '1. Selecciona el delito:',
+    describeTitle: '2. Describe lo ocurrido en segundos:',
+    locationTitle: 'Indica la Ubicación del Suceso:',
+    gpsButton: 'OBTENER MI UBICACIÓN GPS EXACTA',
+    addressPlaceholder: 'Av., Calle, Pasaje o Referencia conocida...',
+    evidenceTitle: 'Evidencia Fotográfica (Opcional):',
+    takePhoto: 'Tomar Foto',
+    chooseGallery: 'Galería',
+    pinTitle: 'PIN de Consulta Secreta (6 Dígitos):',
+    pinDesc: 'Opcional. Permite consultar el estado de tu caso sin revelar tu identidad.',
+    submitBtn: 'ENVIAR DENUNCIA DE FORMA ANÓNIMA',
+  },
+  success: {
+    title: '¡Denuncia Registrada con Éxito!',
+    subtitle: 'La guardia de la Comisaría de La Tinguiña ha recibido la alerta de forma 100% anónima.',
+    codeLabel: 'TU CÓDIGO PÚBLICO DE SEGUIMIENTO:',
+    pinLabel: 'PIN Secreto:',
+    copyReceipt: 'COPIAR COMPROBANTE',
+    backHome: 'Volver al Inicio',
+  },
+  community: {
+    title: 'Muro Cívico Vecinal',
+    subtitle: 'Problemas de infraestructura distrital',
+    newReport: 'Registrar Incidencia Vecinal',
+    shareWhatsapp: 'Tarjeta WhatsApp',
+  },
+  tracking: {
+    title: 'Consulta y Seguimiento',
+    subtitle: 'Rastreo anónimo en tiempo real',
+    enterCode: 'Ingresa tu Código de Denuncia',
+    searchBtn: 'Consultar Estado',
+    mySavedReports: 'Mis Denuncias Guardadas',
+  },
+} as const;
+
+export type TranslationKeys = {
+  [K in keyof typeof es]: {
+    [P in keyof (typeof es)[K]]: string;
+  };
+};

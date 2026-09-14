@@ -16,12 +16,14 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { Category } from '@/types';
 import { CommunityReportsService } from '@/services/communityReportsService';
-import { StorageService } from '@/services/storageService';
+import { useReceiptsStore } from '@/stores/useReceiptsStore';
+import { useCommunityCategories } from '@/hooks/queries/useCommunityQueries';
 import {
   COMMUNITY_QUICK_PRESETS,
   LA_TINGUINA_ZONES,
@@ -30,9 +32,11 @@ import {
 export default function NewCommunityReportScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { data: categoriesData } = useCommunityCategories();
+  const categories = categoriesData || [];
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
@@ -41,13 +45,10 @@ export default function NewCommunityReportScreen() {
   const [gpsLoading, setGpsLoading] = useState(false);
 
   useEffect(() => {
-    CommunityReportsService.getCategories().then((cats) => {
-      setCategories(cats);
-      if (cats.length > 0) {
-        setSelectedCategory(cats[0]);
-      }
-    });
-  }, []);
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
 
   const handleToggleCivicTag = (tag: string) => {
     setDescription((prev) => {
@@ -176,7 +177,7 @@ export default function NewCommunityReportScreen() {
         console.log('[ComunitarioNuevo] ℹ️ Reporte comunitario enviado sin foto adjunta.');
       }
 
-      await StorageService.saveReportReceipt({
+      await useReceiptsStore.getState().addReceipt({
         public_code: response.public_code,
         type: 'reporte_comunitario',
         category_name: selectedCategory.name,
@@ -214,7 +215,10 @@ export default function NewCommunityReportScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Spacing.seven + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

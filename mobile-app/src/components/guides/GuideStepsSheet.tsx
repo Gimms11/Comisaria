@@ -8,6 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { GuideItem } from '@/types';
@@ -24,6 +25,7 @@ export const GuideStepsSheet: React.FC<GuideStepsSheetProps> = ({
   onClose,
 }) => {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   if (!guide) return null;
 
@@ -38,7 +40,11 @@ export const GuideStepsSheet: React.FC<GuideStepsSheetProps> = ({
         <View
           style={[
             styles.sheetContainer,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              paddingBottom: Math.max(insets.bottom, Spacing.four),
+            },
           ]}
         >
           {/* Header */}

@@ -16,20 +16,21 @@ import { Image } from 'expo-image';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { GuideVideoCard } from '@/components/guides/GuideVideoCard';
 import { BorderRadius, Spacing } from '@/constants/theme';
-import { GuideCategory, GuideItem } from '@/types';
-import { GuidesService } from '@/services/guidesService';
-import { logger } from '@/utils/logger';
+import { GuideItem } from '@/types';
+import { useGuideCategories, useGuidesFeed } from '@/hooks/queries/useGuideQueries';
 
 export default function GuidesScreen() {
-  const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<GuideCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [guides, setGuides] = useState<GuideItem[]>([]);
   const [feedHeight, setFeedHeight] = useState<number>(600);
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [isScreenFocused, setIsScreenFocused] = useState<boolean>(true);
 
   const flatListRef = useRef<FlatList<GuideItem>>(null);
+
+  const { data: categories = [], isLoading: loadingCategories } = useGuideCategories();
+  const { data: guides = [], isLoading: loadingGuides } = useGuidesFeed(selectedCategory);
+
+  const loading = (loadingCategories || loadingGuides) && guides.length === 0;
 
   // Pause playback immediately when user navigates to another tab
   useFocusEffect(
@@ -49,42 +50,21 @@ export default function GuidesScreen() {
     return () => sub.remove();
   }, []);
 
-  const loadData = async (catId?: string) => {
-    try {
-      logger.info('GUIDES', `Cargando guías (categoría: ${catId || 'all'})...`);
-      const [cats, items] = await Promise.all([
-        GuidesService.getCategories(),
-        GuidesService.listGuides(catId === 'all' ? undefined : catId),
-      ]);
-      setCategories(cats);
-      setGuides(items);
-      logger.info('GUIDES', `Guías listas para mostrar: ${items.length} items.`);
-
-      // Pre-warm thumbnail images into memory/disk cache for zero-lag swipe
-      if (items.length > 0) {
-        const urls = items
-          .slice(0, 6)
-          .map((g) => g.thumbnail_url)
-          .filter(Boolean) as string[];
-        urls.forEach((url) => {
-          Image.prefetch(url).catch(() => {});
-        });
-      }
-    } catch (e: any) {
-      logger.error('GUIDES', 'Error al cargar guías:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Pre-warm thumbnail images into memory/disk cache for zero-lag swipe
   useEffect(() => {
-    loadData();
-  }, []);
+    if (guides.length > 0) {
+      const urls = guides
+        .slice(0, 6)
+        .map((g) => g.thumbnail_url)
+        .filter(Boolean) as string[];
+      urls.forEach((url) => {
+        Image.prefetch(url).catch(() => {});
+      });
+    }
+  }, [guides]);
 
   const handleCategorySelect = (catId: string) => {
     setSelectedCategory(catId);
-    setLoading(true);
-    loadData(catId);
     setActiveIndex(0);
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
   };

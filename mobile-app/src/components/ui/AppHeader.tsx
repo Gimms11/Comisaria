@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation, Language } from '@/i18n';
 import { EmergencyModal } from './EmergencyModal';
 
 interface AppHeaderProps {
@@ -14,14 +16,24 @@ interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
-  title = 'Comisaría La Tinguiña',
-  subtitle = 'Atención y Seguridad Ciudadana',
+  title,
+  subtitle,
   showBack = false,
   showEmergency = true,
 }) => {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { t, language, setLanguage } = useTranslation();
   const [emergencyVisible, setEmergencyVisible] = useState(false);
+
+  const displayTitle = title || t.common.appName;
+  const displaySubtitle = subtitle || t.common.appSubtitle;
+
+  const handleToggleLang = () => {
+    const cycle: Record<Language, Language> = { es: 'qu', qu: 'en', en: 'es' };
+    setLanguage(cycle[language]);
+  };
 
   return (
     <>
@@ -31,6 +43,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           {
             backgroundColor: theme.card,
             borderBottomColor: theme.cardBorder,
+            paddingTop: insets.top + (Platform.OS === 'ios' ? Spacing.two : Spacing.three),
           },
         ]}
       >
@@ -54,27 +67,46 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             </View>
             <View>
               <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-                {title}
+                {displayTitle}
               </Text>
               <Text style={[styles.subtitle, { color: theme.textSecondary }]} numberOfLines={1}>
-                {subtitle}
+                {displaySubtitle}
               </Text>
             </View>
           </View>
         </View>
 
-        {showEmergency && (
+        <View style={styles.rightActions}>
           <Pressable
-            onPress={() => setEmergencyVisible(true)}
+            onPress={handleToggleLang}
             style={({ pressed }) => [
-              styles.sosButton,
-              { backgroundColor: theme.danger, opacity: pressed ? 0.8 : 1 },
+              styles.langPill,
+              {
+                backgroundColor: theme.backgroundElement,
+                borderColor: theme.cardBorder,
+                opacity: pressed ? 0.7 : 1,
+              },
             ]}
+            accessibilityLabel={`Idioma actual: ${language.toUpperCase()}`}
           >
-            <Feather name="phone-call" size={14} color="#FFFFFF" />
-            <Text style={styles.sosText}>SOS 105</Text>
+            <Text style={[styles.langPillText, { color: theme.text }]}>
+              {language.toUpperCase()}
+            </Text>
           </Pressable>
-        )}
+
+          {showEmergency && (
+            <Pressable
+              onPress={() => setEmergencyVisible(true)}
+              style={({ pressed }) => [
+                styles.sosButton,
+                { backgroundColor: theme.danger, opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <Feather name="phone-call" size={14} color="#FFFFFF" />
+              <Text style={styles.sosText}>{t.common.sos}</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <EmergencyModal
@@ -153,6 +185,22 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  rightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  langPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  langPillText: {
+    fontSize: 10,
+    fontWeight: '900',
     letterSpacing: 0.5,
   },
 });

@@ -12,16 +12,18 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { StatusBadge, getStatusConfig } from '@/components/ui/StatusBadge';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { LocalReportReceipt, ReportStatusDetail } from '@/types';
 import { CrimeReportsService } from '@/services/crimeReportsService';
-import { StorageService } from '@/services/storageService';
+import { useReceiptsStore } from '@/stores/useReceiptsStore';
 
 export default function TrackingScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ code?: string; pin?: string }>();
 
   const [publicCode, setPublicCode] = useState(params.code || '');
@@ -30,21 +32,12 @@ export default function TrackingScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReportStatusDetail | null>(null);
-  const [myReports, setMyReports] = useState<LocalReportReceipt[]>([]);
-
-  const refreshSavedReports = async () => {
-    try {
-      const saved = await StorageService.getMyReports();
-      setMyReports(saved);
-    } catch (e) {
-      console.warn('Error fetching saved reports:', e);
-    }
-  };
+  const { receipts: myReports, loadReceipts } = useReceiptsStore();
 
   useFocusEffect(
     useCallback(() => {
-      refreshSavedReports();
-    }, [])
+      loadReceipts();
+    }, [loadReceipts])
   );
 
   useEffect(() => {
@@ -102,7 +95,7 @@ export default function TrackingScreen() {
     setPin('');
     setShowPinInput(false);
     setError(null);
-    await refreshSavedReports();
+    await loadReceipts();
   };
 
   return (
@@ -116,7 +109,10 @@ export default function TrackingScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Spacing.seven + insets.bottom + 20 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

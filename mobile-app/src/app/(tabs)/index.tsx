@@ -11,43 +11,35 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { GuideItem, LocalReportReceipt } from '@/types';
 import { GuidesService } from '@/services/guidesService';
-import { StorageService } from '@/services/storageService';
+import { useReceiptsStore } from '@/stores/useReceiptsStore';
+import { useGuidesFeed } from '@/hooks/queries/useGuideQueries';
 import { GuideStepsSheet } from '@/components/guides/GuideStepsSheet';
 
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [featuredGuides, setFeaturedGuides] = useState<GuideItem[]>([]);
-  const [myReports, setMyReports] = useState<LocalReportReceipt[]>([]);
   const [selectedGuide, setSelectedGuide] = useState<GuideItem | null>(null);
 
-  const loadData = async () => {
-    try {
-      const [guides, saved] = await Promise.all([
-        GuidesService.listGuides(),
-        StorageService.getMyReports(),
-      ]);
-      setFeaturedGuides(guides.slice(0, 4));
-      setMyReports(saved);
-    } catch (e) {
-      console.warn('Error loading home data:', e);
-    }
-  };
+  const { receipts: myReports, loadReceipts } = useReceiptsStore();
+  const { data: guidesData, refetch: refetchGuides } = useGuidesFeed('all');
+  const featuredGuides = (guidesData || []).slice(0, 4);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadReceipts();
+  }, [loadReceipts]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([refetchGuides(), loadReceipts()]);
     setRefreshing(false);
   };
 
@@ -62,7 +54,10 @@ export default function HomeScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Spacing.seven + insets.bottom + 20 },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

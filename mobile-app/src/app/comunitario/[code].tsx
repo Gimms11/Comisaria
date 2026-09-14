@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,31 +9,22 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { SocialCard } from '@/components/ui/SocialCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { CommunityReportItem } from '@/types';
-import { CommunityReportsService } from '@/services/communityReportsService';
+import { useCommunityReportDetail } from '@/hooks/queries/useCommunityQueries';
 
 export default function CommunityReportDetailScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ code: string }>();
+  const code = params.code || '';
 
-  const [loading, setLoading] = useState(true);
-  const [report, setReport] = useState<CommunityReportItem | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (params.code) {
-      CommunityReportsService.getCommunityReport(params.code)
-        .then((data) => setReport(data))
-        .catch((e) => setError(e.message || 'Reporte no encontrado'))
-        .finally(() => setLoading(false));
-    }
-  }, [params.code]);
+  const { data: report, isLoading: loading, error } = useCommunityReportDetail(code);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -57,7 +48,7 @@ export default function CommunityReportDetailScreen() {
             Reporte no disponible
           </Text>
           <Text style={[styles.errorDesc, { color: theme.textSecondary }]}>
-            {error || 'No se pudo cargar la información de esta incidencia.'}
+            {error?.message || 'No se pudo cargar la información de esta incidencia.'}
           </Text>
           <Pressable
             onPress={() => router.back()}
@@ -68,7 +59,10 @@ export default function CommunityReportDetailScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Spacing.seven + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {/* Social Card Component with WhatsApp button */}

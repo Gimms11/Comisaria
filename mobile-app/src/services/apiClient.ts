@@ -114,13 +114,7 @@ export async function apiUploadFile<T>(
   mimeType: string = 'image/jpeg',
   timeoutMs: number = 60000
 ): Promise<T> {
-  console.log('[UploadTrace] ========================================');
-  console.log('[UploadTrace] 📤 Iniciando transferencia multipart');
-  console.log('[UploadTrace] 🎯 URL Destino:', url);
-  console.log('[UploadTrace] 📱 Plataforma:', Platform.OS);
-  console.log('[UploadTrace] 📁 Archivo Local URI:', fileUri);
-  console.log('[UploadTrace] 🏷️ Nombre:', fileName, '| Tipo:', mimeType);
-  console.log('[UploadTrace] ========================================');
+  const uploadTracer = logger.traceUpload(url, fileName, mimeType);
 
   if (Platform.OS === 'web') {
     try {
@@ -143,14 +137,14 @@ export async function apiUploadFile<T>(
         if (data && typeof data === 'object') {
           msg = data.detail || data.message || msg;
         }
-        console.error('[UploadTrace] ❌ Error Web:', msg);
+        uploadTracer.fail(msg);
         throw new ApiError(msg, response.status, data);
       }
 
-      console.log('[UploadTrace] ✅ Subida Web exitosa:', data);
+      uploadTracer.done(response.status, data);
       return data as T;
     } catch (err: any) {
-      console.error('[UploadTrace] ❌ Fallo en subida Web:', err);
+      uploadTracer.fail(err);
       if (err instanceof ApiError) throw err;
       throw new ApiError(err.message || 'Error al subir archivo en Web', 0);
     }
@@ -176,13 +170,12 @@ export async function apiUploadFile<T>(
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const percent = Math.round((event.loaded / event.total) * 100);
-          console.log(`[UploadTrace] ⏳ Progreso: ${percent}% (${event.loaded}/${event.total} bytes)`);
+          uploadTracer.progress(percent, event.loaded, event.total);
         }
       };
     }
 
     xhr.onload = () => {
-      console.log(`[UploadTrace] 📥 Respuesta del servidor recibida (HTTP ${xhr.status})`);
       let parsedData: any;
       try {
         parsedData = JSON.parse(xhr.responseText);
@@ -191,7 +184,7 @@ export async function apiUploadFile<T>(
       }
 
       if (xhr.status >= 200 && xhr.status < 300) {
-        console.log('[UploadTrace] ✅ Evidencia multimedia cargada con éxito:', parsedData);
+        uploadTracer.done(xhr.status, parsedData);
         resolve(parsedData as T);
       } else {
         let errMsg = `Error HTTP ${xhr.status}: ${xhr.statusText || 'Fallo de subida'}`;
@@ -200,22 +193,21 @@ export async function apiUploadFile<T>(
           else if (Array.isArray(parsedData.detail)) errMsg = parsedData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ');
           else if (typeof parsedData.message === 'string') errMsg = parsedData.message;
         }
-        console.error('[UploadTrace] ❌ Error en servidor al procesar foto:', errMsg);
+        uploadTracer.fail(errMsg);
         reject(new ApiError(errMsg, xhr.status, parsedData));
       }
     };
 
     xhr.onerror = (err) => {
-      console.error('[UploadTrace] ❌ Error de red XMLHttpRequest:', err);
+      uploadTracer.fail(err);
       reject(new ApiError('Error de red al subir archivo a través de la pasarela', 0, err));
     };
 
     xhr.ontimeout = () => {
-      console.error('[UploadTrace] ❌ Timeout excedido tras', timeoutMs, 'ms');
+      uploadTracer.fail('Timeout excedido');
       reject(new ApiError('Tiempo de espera agotado al subir archivo', 408));
     };
 
-    console.log('[UploadTrace] 🚀 Enviando paquete XMLHttpRequest al backend...');
     xhr.send(formData);
   });
 }

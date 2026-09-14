@@ -2,10 +2,14 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function TabLayout() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarPaddingBottom = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 8);
+  const tabBarHeight = (Platform.OS === 'ios' ? 56 : 58) + insets.bottom;
 
   return (
     <Tabs
@@ -17,8 +21,8 @@ export default function TabLayout() {
           backgroundColor: theme.card,
           borderTopColor: theme.cardBorder,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+          height: tabBarHeight,
+          paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
           elevation: 8,
           ...Platform.select({

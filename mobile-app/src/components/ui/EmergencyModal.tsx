@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EMERGENCY_NUMBERS } from '@/config/api.config';
 import { BorderRadius, Colors, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -20,6 +21,7 @@ interface EmergencyModalProps {
 
 export const EmergencyModal: React.FC<EmergencyModalProps> = ({ visible, onClose }) => {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const handleCall = (number: string) => {
     const cleanNumber = number.replace(/[^\d+]/g, '');
@@ -39,7 +41,11 @@ export const EmergencyModal: React.FC<EmergencyModalProps> = ({ visible, onClose
         <View
           style={[
             styles.container,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              paddingBottom: Math.max(insets.bottom, Spacing.four),
+            },
           ]}
         >
           {/* Header */}

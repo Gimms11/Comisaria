@@ -9,6 +9,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -16,6 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 export default function CrimeReportSuccessScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     code: string;
     pin?: string;
@@ -47,7 +49,10 @@ export default function CrimeReportSuccessScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Spacing.seven + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Success Emblem */}

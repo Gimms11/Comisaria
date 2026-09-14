@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,51 +11,38 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { SocialCard } from '@/components/ui/SocialCard';
 import { BorderRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { Category, CommunityReportItem } from '@/types';
-import { CommunityReportsService } from '@/services/communityReportsService';
-import { logger } from '@/utils/logger';
+import { useCommunityCategories, useCommunityReports } from '@/hooks/queries/useCommunityQueries';
 
 export default function CommunityFeedScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [reports, setReports] = useState<CommunityReportItem[]>([]);
-  const [sharingReport, setSharingReport] = useState<CommunityReportItem | null>(null);
 
-  const loadData = async () => {
-    try {
-      logger.info('COMMUNITY', 'Cargando categorías e incidencias vecinales...');
-      const [cats, items] = await Promise.all([
-        CommunityReportsService.getCategories(),
-        CommunityReportsService.listCommunityReports(),
-      ]);
-      setCategories(cats);
-      setReports(items);
-      logger.info('COMMUNITY', `Reportes comunitarios cargados: ${items.length} items`);
-    } catch (e: any) {
-      logger.error('COMMUNITY', 'Error al cargar reportes comunitarios:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: categories = [],
+    isLoading: loadingCategories,
+    refetch: refetchCategories,
+  } = useCommunityCategories();
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const {
+    data: reports = [],
+    isLoading: loadingReports,
+    isRefetching,
+    refetch: refetchReports,
+  } = useCommunityReports();
+
+  const loading = (loadingCategories || loadingReports) && reports.length === 0;
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    await Promise.all([refetchCategories(), refetchReports()]);
   };
 
   const filteredReports = reports.filter((r) => {
@@ -295,11 +282,14 @@ export default function CommunityFeedScreen() {
           keyExtractor={(item) => item.public_code}
           renderItem={renderReportCard}
           ListHeaderComponent={renderHeader}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Spacing.seven + insets.bottom + 20 },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={isRefetching}
               onRefresh={onRefresh}
               tintColor={theme.primary}
             />
