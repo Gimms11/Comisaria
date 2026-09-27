@@ -11,6 +11,7 @@ import { I18nProvider } from '@/i18n';
 import { Colors } from '@/constants/theme';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
+import { warmupServices } from '@/services/apiClient';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,7 @@ export default function RootLayout() {
   const themeColors = Colors[isDark ? 'dark' : 'light'];
 
   useEffect(() => {
+    warmupServices().catch(() => {});
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 

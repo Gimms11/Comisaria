@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { API_CONFIG } from '@/config/api.config';
+import { Env } from '@/config/env';
 import { logger } from '@/utils/logger';
 
 export class ApiError extends Error {
@@ -210,5 +211,23 @@ export async function apiUploadFile<T>(
 
     xhr.send(formData);
   });
+}
+
+/**
+ * Dispara pings en paralelo a los endpoints de salud de todos los microservicios
+ * para mitigar los Cold Starts de Cloud Run Scale-to-Zero al abrir la app móvil.
+ */
+export async function warmupServices(): Promise<void> {
+  const endpoints = [
+    `${Env.MS01_URL}/healthz`,
+    `${Env.MS02_URL}/healthz`,
+    `${Env.MS03_URL}/healthz`,
+    `${Env.MS04_URL}/healthz`,
+  ];
+  await Promise.allSettled(
+    endpoints.map((url) =>
+      fetch(url, { method: 'GET' }).catch(() => null)
+    )
+  );
 }
 

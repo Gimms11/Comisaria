@@ -393,6 +393,24 @@ class ApiClient {
     const wsHost = MS01_URL.replace('http://', 'ws://').replace('https://', 'wss://');
     return `${wsHost}/ws/v1/police/alerts?ticket=${ticket}`;
   }
+
+  /**
+   * Dispara pings en paralelo a los endpoints de salud de todos los microservicios
+   * para despertar los contenedores en Cloud Run (mitigación de Cold Start Scale-to-Zero).
+   */
+  async warmupServices(): Promise<void> {
+    const endpoints = [
+      `${MS01_URL}/healthz`,
+      `${MS02_URL}/healthz`,
+      `${MS03_URL}/healthz`,
+      `${MS04_URL}/healthz`,
+    ];
+    await Promise.allSettled(
+      endpoints.map((url) =>
+        fetch(url, { method: 'GET', cache: 'no-store' }).catch(() => null)
+      )
+    );
+  }
 }
 
 export const api = new ApiClient();
