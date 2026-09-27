@@ -50,6 +50,8 @@ export const App: React.FC = () => {
     };
   }, [isAuthenticated, connect, disconnect]);
 
+  const isFirstRender = React.useRef(true);
+
   // Sync URL changes to uiStore activeTab
   useEffect(() => {
     const currentTab = pathToTab[location.pathname];
@@ -58,8 +60,12 @@ export const App: React.FC = () => {
     }
   }, [location.pathname]);
 
-  // Sync uiStore activeTab changes to URL
+  // Sync uiStore activeTab changes to URL (only after user changes activeTab)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     const targetPath = tabToPath[activeTab];
     if (targetPath && location.pathname !== targetPath && location.pathname !== '/login') {
       navigate(targetPath, { replace: false });
